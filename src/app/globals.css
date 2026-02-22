@@ -1,33 +1,42 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap");
+@import "tailwindcss";
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: #0b1728;
+  background-color: #eef2f5;
+  background-image:
+    radial-gradient(circle at 12% 0%, rgba(25, 41, 61, 0.045) 0%, transparent 52%),
+    linear-gradient(180deg, #f6f8fa 0%, #eef2f5 56%, #e9edf1 100%);
+  font-family: "Manrope", -apple-system, "Segoe UI", sans-serif;
+  font-weight: 560;
+  letter-spacing: 0.004em;
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Manrope", -apple-system, "Segoe UI", sans-serif;
+  font-weight: 760;
+  letter-spacing: -0.01em;
 }
 
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 a {
@@ -35,8 +44,8 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+video,
+canvas {
+  display: block;
 }
+

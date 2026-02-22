@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sterile Face Insight Console
 
-## Getting Started
+Light-mode facecam overlays with:
+- on-device facial-part tracking via MediaPipe Face Landmarker
+- three Gemini layers:
+  - Layer 1 Lite: `gemini-2.5-flash-lite` (primary emotion classification)
+  - Layer 2 Flash: `gemini-3.0-flash-preview` (basic emotion/fatigue cues)
+  - Layer 3 Pro: `gemini-3.1-pro-preview` (slow, buffered, in-depth interpretation)
+- in-camera canvas UI with left Flash legend and right Pro legend
 
-First, run the development server:
+## Requirements
+
+- Node 20+
+- `GEMINI_API_KEY` set in your environment (required for API routes)
+
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Lite lane: `POST /api/analyze/lite`
+- Flash lane: `POST /api/analyze/fast`
+- Pro lane: `POST /api/analyze/depth`
+- Compatibility lane: `POST /api/analyze` (merged multi-lane payload)
+- Overlay: single canvas compositor + collision-aware label layout + temporal smoothing
+- Tracking: MediaPipe landmarks keep Flash emotion labels attached between AI responses
 
-## Learn More
+## Rollout Strategy
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Verify Lite lane stability for primary emotion updates.
+2. Validate Flash legend quality at its slower interval.
+3. Confirm Pro interpretation cadence and disclaimer text with real webcam runs.
