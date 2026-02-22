@@ -679,7 +679,7 @@ export default function Home() {
 
     const scheduleLane = (lane: Lane, delayMs: number) => {
       if (!runningRef.current) return;
-      const safeDelayMs = lane === "pro" ? Math.max(delayMs, LANE_INTERVAL_MS.pro) : delayMs;
+      const safeDelayMs = Math.max(0, delayMs);
       const timerRef = lane === "lite" ? liteTimerRef : lane === "flash" ? flashTimerRef : proTimerRef;
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(() => {
