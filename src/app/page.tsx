@@ -77,6 +77,7 @@ const INITIAL_GEMINI_COOLDOWN_MS = 2000;
 const PRO_FIRST_PRE_CAPTURE_WAIT_MS = 5000;
 const PRO_VIDEO_CLIP_MS = 5000;
 const PRO_VIDEO_MAX_BASE64_LENGTH = 8_000_000;
+const PRO_EMPTY_RESULT_RETRY_MS = 3500;
 const PRO_VIDEO_MIME_CANDIDATES = [
   "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp8,opus",
@@ -135,19 +136,63 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function toPixels(point: NormalizedPoint, width: number, height: number): { x: number; y: number } {
-  return { x: (point[1] / 1000) * width, y: (point[0] / 1000) * height };
+interface CoverProjection {
+  offsetX: number;
+  offsetY: number;
+  renderWidth: number;
+  renderHeight: number;
+}
+
+function computeCoverProjection(
+  video: HTMLVideoElement | null,
+  viewportWidth: number,
+  viewportHeight: number,
+): CoverProjection {
+  const safeWidth = Math.max(1, viewportWidth);
+  const safeHeight = Math.max(1, viewportHeight);
+  const sourceWidth = Math.max(1, video?.videoWidth || safeWidth);
+  const sourceHeight = Math.max(1, video?.videoHeight || safeHeight);
+  const sourceAspect = sourceWidth / sourceHeight;
+  const viewportAspect = safeWidth / safeHeight;
+
+  let renderWidth = safeWidth;
+  let renderHeight = safeHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (sourceAspect > viewportAspect) {
+    // Source is wider: fill height and crop left/right.
+    renderHeight = safeHeight;
+    renderWidth = safeHeight * sourceAspect;
+    offsetX = (safeWidth - renderWidth) / 2;
+  } else if (sourceAspect < viewportAspect) {
+    // Source is taller: fill width and crop top/bottom.
+    renderWidth = safeWidth;
+    renderHeight = safeWidth / sourceAspect;
+    offsetY = (safeHeight - renderHeight) / 2;
+  }
+
+  return { offsetX, offsetY, renderWidth, renderHeight };
+}
+
+function toPixels(
+  point: NormalizedPoint,
+  projection: CoverProjection,
+): { x: number; y: number } {
+  return {
+    x: projection.offsetX + (point[1] / 1000) * projection.renderWidth,
+    y: projection.offsetY + (point[0] / 1000) * projection.renderHeight,
+  };
 }
 
 function faceBoxToPixels(
   faceBox: NormalizedFaceBox,
-  width: number,
-  height: number,
+  projection: CoverProjection,
 ): { x: number; y: number; w: number; h: number } {
-  const x = (faceBox[1] / 1000) * width;
-  const y = (faceBox[0] / 1000) * height;
-  const w = ((faceBox[3] - faceBox[1]) / 1000) * width;
-  const h = ((faceBox[2] - faceBox[0]) / 1000) * height;
+  const x = projection.offsetX + (faceBox[1] / 1000) * projection.renderWidth;
+  const y = projection.offsetY + (faceBox[0] / 1000) * projection.renderHeight;
+  const w = ((faceBox[3] - faceBox[1]) / 1000) * projection.renderWidth;
+  const h = ((faceBox[2] - faceBox[0]) / 1000) * projection.renderHeight;
   return { x, y, w, h };
 }
 
@@ -252,6 +297,16 @@ function dedupeProInsights(insights: DepthAnalysisResult["insights"]): DepthAnal
     }
   }
   return [...seen.values()].sort((a, b) => b.confidence - a.confidence);
+}
+
+function hasUsableProInsights(insights: DepthAnalysisResult["insights"]): boolean {
+  return insights.some(
+    (item) =>
+      item.keyword.trim().length > 0 &&
+      Number.isFinite(item.confidence) &&
+      item.confidence >= 0.12 &&
+      (item.rationale.trim().length > 0 || (item.medicalInterpretation?.trim().length ?? 0) > 0),
+  );
 }
 
 export default function Home() {
@@ -579,11 +634,12 @@ export default function Home() {
       const tracked = trackedFrameRef.current;
       const flash = flashResultRef.current;
       const lite = liteResultRef.current;
+      const projection = computeCoverProjection(videoRef.current, width, height);
       const faceBox = tracked?.faceBox ?? flash?.faceBox ?? lite?.faceBox;
       let faceCenterX = width / 2;
       let faceCenterY = height / 2;
       if (faceBox) {
-        const box = faceBoxToPixels(faceBox, width, height);
+        const box = faceBoxToPixels(faceBox, projection);
         faceCenterX = box.x + box.w / 2;
         faceCenterY = box.y + box.h / 2;
         ctx.strokeStyle = "rgba(0, 238, 168, 0.96)";
@@ -607,7 +663,10 @@ export default function Home() {
       const emotionFont = '700 11px "Manrope", ui-sans-serif, system-ui, sans-serif';
       ctx.font = emotionFont;
       const items = visibleAnchors.map((anchor) => {
-        const point = toPixels(smootherRef.current.smooth(anchor.id, anchor.projectedPoint, nowMs), width, height);
+        const point = toPixels(
+          smootherRef.current.smooth(anchor.id, anchor.projectedPoint, nowMs),
+          projection,
+        );
         const text = anchor.label;
         return {
           anchor,
@@ -832,7 +891,9 @@ export default function Home() {
       const isFirstProRequest = !proFirstRequestStartedRef.current;
       const faceDetected = Boolean(flashResultRef.current?.faceDetected || liteResultRef.current?.faceDetected);
       if (pendingRef.current.pro) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
-      if (!isFirstProRequest && !faceDetected) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
+      if (!faceDetected) {
+        return void scheduleLane("pro", isFirstProRequest ? 700 : LANE_INTERVAL_MS.pro);
+      }
 
       if (isFirstProRequest) {
         const preCaptureRemainingMs = Math.max(0, proFirstCaptureAtRef.current - performance.now());
@@ -854,6 +915,7 @@ export default function Home() {
       const controller = new AbortController();
       proAbortRef.current = controller;
       const startedAt = performance.now();
+      let retryDelayOverrideMs: number | null = null;
 
       try {
         const response = await fetch("/api/analyze/depth", {
@@ -863,25 +925,35 @@ export default function Home() {
           signal: controller.signal,
           body: JSON.stringify({ ...payload, ...videoClipPayload, frameId }),
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          retryDelayOverrideMs = PRO_EMPTY_RESULT_RETRY_MS;
+          return;
+        }
         const envelope = (await response.json()) as AnalysisEnvelope<DepthAnalysisResult>;
         const receivedFrameId = Number(envelope.frameId ?? envelope.result?.frameId ?? 0);
         if (!receivedFrameId || receivedFrameId < appliedFrameRef.current.pro) return;
         appliedFrameRef.current.pro = receivedFrameId;
-        proResultRef.current = envelope.result;
-        setProLegend(dedupeProInsights(envelope.result.insights ?? []));
+        const dedupedInsights = dedupeProInsights(envelope.result.insights ?? []);
+        const usableInsights = hasUsableProInsights(dedupedInsights);
+        if (!usableInsights) {
+          retryDelayOverrideMs = isFirstProRequest ? 2200 : PRO_EMPTY_RESULT_RETRY_MS;
+        }
+        proResultRef.current = usableInsights || !proResultRef.current ? envelope.result : proResultRef.current;
+        setProLegend((previous) => (usableInsights ? dedupedInsights : previous));
 
         const serverMs = Number(envelope.latencyMs);
         const elapsed = Math.max(0, performance.now() - startedAt);
         const nextMs = Number.isFinite(serverMs) && serverMs > 0 ? serverMs : elapsed;
         setHud((previous) => ({ ...previous, proMs: Math.round(nextMs) }));
       } catch (error) {
+        retryDelayOverrideMs = PRO_EMPTY_RESULT_RETRY_MS;
         if (!(error instanceof Error) || error.name !== "AbortError") console.error("Pro loop error:", error);
       } finally {
         pendingRef.current.pro = false;
         setHud((previous) => ({ ...previous, proPending: false }));
         proAbortRef.current = null;
-        scheduleLaneFromCycle("pro", startedAt, 200);
+        if (retryDelayOverrideMs !== null) scheduleLane("pro", retryDelayOverrideMs);
+        else scheduleLaneFromCycle("pro", startedAt, 200);
       }
     };
 

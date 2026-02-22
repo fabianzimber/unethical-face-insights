@@ -17,11 +17,11 @@ const PRO_MODEL = "gemini-3.1-pro-preview";
 
 const LITE_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3-flash-preview"];
 const FLASH_FALLBACK_MODELS = ["gemini-3-flash-preview"];
-const PRO_FALLBACK_MODELS = ["gemini-3.1-pro-preview"];
+const PRO_FALLBACK_MODELS = ["gemini-3-pro-preview"];
 
 const LITE_TIMEOUT_MS = 6_500;
 const FLASH_TIMEOUT_MS = 9_000;
-const PRO_TIMEOUT_MS = 120_000;
+const PRO_TIMEOUT_MS = 45_000;
 const PRIMARY_EMOTION_MAX_CHARS = 64;
 
 const LITE_COOLDOWN_MS = 450;
