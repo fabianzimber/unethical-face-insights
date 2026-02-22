@@ -17,7 +17,7 @@ const PRO_MODEL = "gemini-3.1-pro-preview";
 
 const LITE_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3-flash-preview"];
 const FLASH_FALLBACK_MODELS = ["gemini-3-flash-preview"];
-const PRO_FALLBACK_MODELS = ["gemini-2.5-pro"];
+const PRO_FALLBACK_MODELS = ["gemini-3.1-pro-preview"];
 
 const LITE_TIMEOUT_MS = 6_500;
 const FLASH_TIMEOUT_MS = 9_000;
@@ -184,8 +184,12 @@ function isNumber(value: unknown): value is number {
 }
 
 function toConfidence(value: unknown, fallback = 0): number {
-  if (!isNumber(value)) return fallback;
-  return clamp(value, 0, 1);
+  if (isNumber(value)) return clamp(value, 0, 1);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return clamp(parsed, 0, 1);
+  }
+  return fallback;
 }
 
 function toPoint(value: unknown, fallback: NormalizedPoint = [500, 500]): NormalizedPoint {
@@ -374,6 +378,8 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
   if (!raw || typeof raw !== "object") return toDefaultLiteResult(options, model);
   const source = raw as Record<string, unknown>;
   const faceBox = toFaceBox(source.faceBox);
+  const faceDetected = Boolean(source.faceDetected) || Boolean(faceBox);
+  const frameConfidence = toConfidence(source.confidence, faceDetected ? 0.7 : 0.1);
   const candidates: LiteAnalysisResult["candidates"] = Array.isArray(source.candidates)
     ? source.candidates.slice(0, 6).map((item) => {
         const record = item as Record<string, unknown>;
@@ -387,14 +393,16 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
   const primaryEmotion = (
     toStringOrFallback(source.primaryEmotion, "") || candidates[0]?.emotion || "neutral"
   ).slice(0, PRIMARY_EMOTION_MAX_CHARS);
+  const primaryCandidate = candidates.find(
+    (candidate) => candidate.emotion.trim().toLowerCase() === primaryEmotion.trim().toLowerCase(),
+  );
   const primaryConfidence = toConfidence(
     source.primaryConfidence,
-    candidates[0]?.confidence ?? 0.4,
+    primaryCandidate?.confidence ?? candidates[0]?.confidence ?? frameConfidence,
   );
   const moodSentence =
     toStringOrFallback(source.moodSentence, "").slice(0, 180) ||
     `The observed mood appears ${primaryEmotion} with ${Math.round(primaryConfidence * 100)}% confidence.`;
-  const faceDetected = Boolean(source.faceDetected) || Boolean(faceBox);
   const headPose =
     source.headPose && typeof source.headPose === "object"
       ? {
@@ -415,7 +423,7 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
     frameId: options.frameId ?? 0,
     capturedAt: options.capturedAt ?? Date.now(),
     faceDetected,
-    confidence: toConfidence(source.confidence, faceDetected ? 0.7 : 0.1),
+    confidence: frameConfidence,
     primaryEmotion,
     primaryConfidence,
     moodSentence,

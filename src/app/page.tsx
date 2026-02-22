@@ -74,6 +74,7 @@ const CAMERA_TARGET_FPS = 24;
 const TRACKING_INTERVAL_MS = 1000 / CAMERA_TARGET_FPS;
 const OVERLAY_DRAW_INTERVAL_MS = 1000 / 30;
 const INITIAL_GEMINI_COOLDOWN_MS = 2000;
+const PRO_FIRST_PRE_CAPTURE_WAIT_MS = 5000;
 const PRO_VIDEO_CLIP_MS = 5000;
 const PRO_VIDEO_MAX_BASE64_LENGTH = 8_000_000;
 const PRO_VIDEO_MIME_CANDIDATES = [
@@ -214,6 +215,33 @@ function hasUsableFlashEmotionPayload(result: FastAnalysisResult | null): boolea
   );
 }
 
+function dedupeEmotionAnchorsByLabel<T extends { label: string; confidence: number; stale?: boolean }>(
+  anchors: T[],
+): T[] {
+  const kept = new Map<string, T>();
+  for (const anchor of anchors) {
+    const key = anchor.label.trim().toLowerCase();
+    if (!key) continue;
+    const previous = kept.get(key);
+    if (!previous) {
+      kept.set(key, anchor);
+      continue;
+    }
+
+    const currentScore = anchor.confidence + (anchor.stale ? -0.03 : 0);
+    const previousScore = previous.confidence + (previous.stale ? -0.03 : 0);
+    if (currentScore > previousScore) {
+      kept.set(key, anchor);
+      continue;
+    }
+
+    if (Math.abs(currentScore - previousScore) < 0.0001 && anchor.label.length > previous.label.length) {
+      kept.set(key, anchor);
+    }
+  }
+  return [...kept.values()].sort((a, b) => b.confidence - a.confidence);
+}
+
 function dedupeProInsights(insights: DepthAnalysisResult["insights"]): DepthAnalysisResult["insights"] {
   const seen = new Map<string, DepthAnalysisResult["insights"][number]>();
   for (const insight of insights) {
@@ -259,6 +287,8 @@ export default function Home() {
   const lastTrackAtRef = useRef(0);
   const lastOverlayDrawAtRef = useRef(0);
   const geminiReadyAtRef = useRef(0);
+  const proFirstCaptureAtRef = useRef(0);
+  const proFirstRequestStartedRef = useRef(false);
 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
@@ -349,12 +379,17 @@ export default function Home() {
     const video = videoRef.current;
     if (!video) return;
     const onPlaying = () => {
+      const now = performance.now();
       setCameraReady(true);
-      geminiReadyAtRef.current = performance.now() + INITIAL_GEMINI_COOLDOWN_MS;
+      geminiReadyAtRef.current = now + INITIAL_GEMINI_COOLDOWN_MS;
+      proFirstCaptureAtRef.current = now + PRO_FIRST_PRE_CAPTURE_WAIT_MS;
+      proFirstRequestStartedRef.current = false;
     };
     const onEnded = () => {
       setCameraReady(false);
       geminiReadyAtRef.current = 0;
+      proFirstCaptureAtRef.current = 0;
+      proFirstRequestStartedRef.current = false;
     };
     video.addEventListener("playing", onPlaying);
     video.addEventListener("emptied", onEnded);
@@ -563,8 +598,9 @@ export default function Home() {
       const anchors = projectedAnchors.length
         ? projectedAnchors
         : buildFlashAnchors(flash).map((anchor) => ({ ...anchor, projectedPoint: anchor.point, stale: false }));
-      const visibleAnchors = anchors
-        .filter((anchor) => anchor.kind === "emotion" && anchor.confidence >= 0.2)
+      const visibleAnchors = dedupeEmotionAnchorsByLabel(
+        anchors.filter((anchor) => anchor.kind === "emotion" && anchor.confidence >= 0.2),
+      )
         .slice(0, MAX_VISIBLE_EMOTION_TAGS);
       if (!visibleAnchors.length) return;
 
@@ -693,7 +729,7 @@ export default function Home() {
         appliedFrameRef.current.lite = receivedFrameId;
         liteResultRef.current = envelope.result;
         const nextLabel = envelope.result.primaryEmotion || "neutral";
-        const nextConfidence = envelope.result.primaryConfidence || 0;
+        const nextConfidence = envelope.result.primaryConfidence ?? 0;
         setPrimaryEmotion({ label: nextLabel, confidence: nextConfidence });
         setPrimaryMoodSentence(
           envelope.result.moodSentence?.trim() || buildLiteMoodSentence(nextLabel, nextConfidence),
@@ -793,8 +829,16 @@ export default function Home() {
 
     const runProLoop = async () => {
       if (!runningRef.current) return;
+      const isFirstProRequest = !proFirstRequestStartedRef.current;
       const faceDetected = Boolean(flashResultRef.current?.faceDetected || liteResultRef.current?.faceDetected);
-      if (pendingRef.current.pro || !faceDetected) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
+      if (pendingRef.current.pro) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
+      if (!isFirstProRequest && !faceDetected) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
+
+      if (isFirstProRequest) {
+        const preCaptureRemainingMs = Math.max(0, proFirstCaptureAtRef.current - performance.now());
+        if (preCaptureRemainingMs > 0) return void scheduleLane("pro", preCaptureRemainingMs + 24);
+      }
+
       const warmupMs = warmupRemainingMs();
       if (warmupMs > 0) return void scheduleLane("pro", warmupMs + 64);
       const payload = captureFrame("pro");
@@ -803,6 +847,7 @@ export default function Home() {
       if (!runningRef.current) return;
 
       pendingRef.current.pro = true;
+      proFirstRequestStartedRef.current = true;
       setHud((previous) => ({ ...previous, proPending: true }));
       requestFrameRef.current.pro += 1;
       const frameId = requestFrameRef.current.pro;
@@ -860,7 +905,7 @@ export default function Home() {
 
     scheduleLane("lite", 0);
     scheduleLane("flash", 420);
-    scheduleLane("pro", 3200);
+    scheduleLane("pro", PRO_FIRST_PRE_CAPTURE_WAIT_MS);
     renderRafRef.current = requestAnimationFrame(render);
 
     return () => {
