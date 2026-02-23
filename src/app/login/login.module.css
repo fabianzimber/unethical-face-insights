@@ -1,0 +1,228 @@
+.loginContainer {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fcfcfc;
+  color: #999999;
+  font-family: 'IBM Plex Mono', monospace;
+  padding: 1rem;
+}
+
+.terminal {
+  width: 100%;
+  max-width: 480px;
+  border: 1px solid #e0e0e0;
+  padding: 4rem 3rem;
+  background-color: #ffffff;
+  box-shadow: 12px 12px 0 #f5f5f5;
+  transition: all 0.3s ease;
+}
+
+.header {
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 1.5rem;
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: #333333;
+  text-transform: lowercase;
+}
+
+.status {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.errorBox {
+  background-color: transparent;
+  color: #ff6666;
+  padding: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 3rem;
+  border: 1px solid #ffcccc;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: lowercase;
+}
+
+.errorText {
+  flex-grow: 1;
+}
+
+.errorBlink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.inviteForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.label {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: #bbbbbb;
+  text-transform: lowercase;
+}
+
+.inputWrapper {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.input {
+  flex-grow: 1;
+  background-color: transparent;
+  color: #333333;
+  border: none;
+  padding: 0.75rem 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: lowercase;
+  outline: none;
+  letter-spacing: 0.1em;
+}
+
+.input::placeholder {
+  color: #eaeaea;
+}
+
+.submitBtn {
+  background-color: transparent;
+  color: #a0a0a0;
+  border: none;
+  padding: 0 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: lowercase;
+}
+
+.submitBtn:hover:not(:disabled) {
+  color: #333333;
+}
+
+.submitBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 3rem 0;
+  font-size: 0.65rem;
+  color: #dddddd;
+}
+
+.line {
+  flex-grow: 1;
+  height: 1px;
+  background-color: #f0f0f0;
+}
+
+.ownerBtn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  background-color: transparent;
+  color: #aaaaaa;
+  border: 1px solid #e5e5e5;
+  padding: 3rem 2rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 400;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.ownerBtn:hover:not(:disabled) {
+  border-color: #cccccc;
+  background-color: #fafafa;
+  color: #555555;
+}
+
+.ownerBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Minimalistic fingerprint visual using concentric CSS borders */
+.fingerprint {
+  width: 50px;
+  height: 60px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  opacity: 0.4;
+  transition: opacity 0.4s ease;
+}
+
+.ownerBtn:hover:not(:disabled) .fingerprint {
+  opacity: 0.9;
+}
+
+.fingerprint::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 1px solid #555555;
+  border-bottom: none;
+  border-radius: 50px 50px 0 0;
+}
+
+.fingerprint::after {
+  content: '';
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  border: 1px solid #555555;
+  border-bottom: none;
+  border-radius: 50px 50px 0 0;
+}
+
+.fingerprintInner {
+  position: absolute;
+  width: 20%;
+  height: 20%;
+  border: 1px solid #555555;
+  border-bottom: none;
+  border-radius: 50px 50px 0 0;
+}
+
+.btnText {
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+}

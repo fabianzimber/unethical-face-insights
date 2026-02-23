@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       emotions: fastResult?.emotions.map((emotion) => ({
         emotion: emotion.emotion,
         intensity: emotion.intensity,
+        confidence: emotion.confidence,
         point: emotion.point,
       })),
       landmarks: fastResult?.landmarks.map((landmark) => ({

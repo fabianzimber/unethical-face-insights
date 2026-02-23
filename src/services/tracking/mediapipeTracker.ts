@@ -91,6 +91,7 @@ function computeFaceBox(points: TrackedLandmark[]): NormalizedFaceBox | undefine
 export class MediaPipeTracker {
   private landmarker: FaceLandmarkerType | null = null;
   private isReady = false;
+  private initPromise: Promise<void> | null = null;
 
   get ready(): boolean {
     return this.isReady;
@@ -98,20 +99,36 @@ export class MediaPipeTracker {
 
   async init(): Promise<void> {
     if (this.landmarker) return;
-    const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-    );
-    this.landmarker = (await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: FACE_MODEL_PATH,
-      },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false,
-    })) as FaceLandmarkerType;
-    this.isReady = true;
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this._doInit();
+    return this.initPromise;
+  }
+
+  private async _doInit(): Promise<void> {
+    try {
+      const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+      );
+      const lm = (await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: FACE_MODEL_PATH,
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false,
+      })) as FaceLandmarkerType;
+      // If dispose() was called while init was in flight, close the new landmarker
+      if (this.initPromise === null) {
+        lm.close();
+        return;
+      }
+      this.landmarker = lm;
+      this.isReady = true;
+    } finally {
+      this.initPromise = null;
+    }
   }
 
   track(video: HTMLVideoElement, timestampMs: number): TrackedFaceFrame | null {
@@ -143,6 +160,7 @@ export class MediaPipeTracker {
   }
 
   dispose(): void {
+    this.initPromise = null; // Signal in-flight init to discard result
     if (this.landmarker) {
       this.landmarker.close();
       this.landmarker = null;

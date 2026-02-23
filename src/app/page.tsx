@@ -13,6 +13,7 @@ import { layoutLabels } from "@/services/overlay/layout";
 import { PointSmoother } from "@/services/overlay/smoothing";
 import { AnchorFusionEngine } from "@/services/tracking/anchorFusion";
 import { MediaPipeTracker } from "@/services/tracking/mediapipeTracker";
+import { InviteGenerator } from "@/components/auth/InviteGenerator";
 import styles from "./page.module.css";
 
 interface AnalysisEnvelope<T> {
@@ -349,6 +350,7 @@ export default function Home() {
   const [cameraReady, setCameraReady] = useState(false);
   const [trackerReady, setTrackerReady] = useState(false);
   const [trackerError, setTrackerError] = useState("");
+  const [role, setRole] = useState<'owner' | 'guest' | null>(null);
   const [primaryEmotion, setPrimaryEmotion] = useState({ label: "neutral", confidence: 0 });
   const [primaryMoodSentence, setPrimaryMoodSentence] = useState("Layer 1 is initializing mood interpretation.");
   const [flashLegend, setFlashLegend] = useState<Array<{ emotion: string; confidence: number; explanation?: string; intensity?: string }>>([]);
@@ -457,8 +459,25 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    startWebcam();
+    let cancelled = false;
+    fetch('/api/auth/me')
+      .then((res) => {
+        if (!res.ok) {
+          window.location.href = '/login';
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled || !data) return;
+        setRole(data.role);
+        startWebcam();
+      })
+      .catch(() => {
+        if (!cancelled) window.location.href = '/login';
+      });
     return () => {
+      cancelled = true;
       runningRef.current = false;
       stopLoops();
       trackerRef.current?.dispose();
@@ -889,7 +908,7 @@ export default function Home() {
     const runProLoop = async () => {
       if (!runningRef.current) return;
       const isFirstProRequest = !proFirstRequestStartedRef.current;
-      const faceDetected = Boolean(flashResultRef.current?.faceDetected || liteResultRef.current?.faceDetected);
+      const faceDetected = Boolean((trackedFrameRef.current?.confidence ?? 0) > 0.5 || flashResultRef.current?.faceDetected || liteResultRef.current?.faceDetected);
       if (pendingRef.current.pro) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
       if (!faceDetected) {
         return void scheduleLane("pro", isFirstProRequest ? 700 : LANE_INTERVAL_MS.pro);
@@ -1013,6 +1032,8 @@ export default function Home() {
             Layer 1 Lite primary emotion, Layer 2 Flash basic signal indices, Layer 3 Medical interpretation.
           </p>
         </header>
+
+        {role === 'owner' && <InviteGenerator />}
 
         <section className={styles.workspace}>
           <div ref={containerRef} className={styles.stage}>

@@ -567,6 +567,10 @@ async function generateWithLaneFallback(args: {
     } catch (error) {
       lastError = error;
       const canFallback = shouldFallbackModelError(error);
+      // Clear cached model if it failed, so we retry preferred model next time
+      if (resolvedLaneModels[args.lane] === model) {
+        delete resolvedLaneModels[args.lane];
+      }
       logApiError(`${args.label} attempt`, error, {
         lane: args.lane,
         model,

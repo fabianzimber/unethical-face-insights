@@ -55,8 +55,11 @@ export async function parseAnalyzePayload(
   }
 
   const frameId = toPositiveInt(body?.frameId) ?? 1;
-  const capturedAt = toFiniteNumber(body?.capturedAt) ?? Date.now();
-  if (Date.now() - capturedAt > MAX_FRAME_AGE_MS) {
+  const now = Date.now();
+  // Clamp capturedAt to server time to prevent clients from sending future timestamps
+  const rawCapturedAt = toFiniteNumber(body?.capturedAt) ?? now;
+  const capturedAt = Math.min(rawCapturedAt, now);
+  if (now - capturedAt > MAX_FRAME_AGE_MS) {
     return { response: fail("Stale frame rejected", 409) };
   }
 
