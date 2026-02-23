@@ -1,4 +1,4 @@
-# Unethical Face Insight Console
+# Face Insight Console
 
 Light-mode facecam overlays with:
 - on-device facial-part tracking via MediaPipe Face Landmarker
