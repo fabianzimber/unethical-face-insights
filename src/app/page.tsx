@@ -515,7 +515,8 @@ export default function Home() {
       .then((data) => {
         if (cancelled || !data) return;
         setRole(data.role);
-        playSound("greetings");
+        // ensure playSound runs after the component renders and the user is authenticated
+        setTimeout(() => playSound("greetings"), 100);
         startWebcam();
       })
       .catch(() => {

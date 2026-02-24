@@ -3,6 +3,7 @@ import { analyzeDepthInsights } from "@/services/gemini";
 import { parseAnalyzePayload, withRequestAbort } from "../shared";
 
 export const runtime = "nodejs";
+export const maxDuration = 300; // Allow up to 5 minutes on Vercel
 
 export async function POST(request: NextRequest) {
   try {

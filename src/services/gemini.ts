@@ -21,7 +21,7 @@ const PRO_FALLBACK_MODELS = ["gemini-3-pro-preview"];
 
 const LITE_TIMEOUT_MS = 6_500;
 const FLASH_TIMEOUT_MS = 9_000;
-const PRO_TIMEOUT_MS = 45_000;
+const PRO_TIMEOUT_MS = 90_000; // Increased base timeout for Pro layer
 const PRIMARY_EMOTION_MAX_CHARS = 64;
 
 const LITE_COOLDOWN_MS = 450;
@@ -745,11 +745,11 @@ Write a detailed, free-form analysis covering:
 
 1. OVERALL IMPRESSION: Start with a 2-4 sentence summary of what you observe overall.
 
-2. DETAILED INSIGHTS: For each notable observation (up to 8), write a thorough analysis that includes:
+2. DETAILED INSIGHTS: For each notable observation (up to 5), write a thorough analysis that includes:
    - A short keyword or label for the observation (e.g. "periorbital darkening", "brow tension", "lip pallor")
    - Which facial area it relates to (eyes, nose, mouth, brows, chin, forehead, cheeks, or general face)
-   - RATIONALE: 3-6 sentences describing the concrete visual clues you see and why they matter
-   - MEDICAL INTERPRETATION: 5-10 sentences covering: what the condition/pattern is, why it can happen (mechanism), why this face could match, and key uncertainties or alternative explanations
+   - RATIONALE: 2-4 sentences describing the concrete visual clues you see and why they matter
+   - MEDICAL INTERPRETATION: 3-6 sentences covering: what the condition/pattern is, why it can happen (mechanism), why this face could match, and key uncertainties or alternative explanations
    - Your confidence level (low / medium / high)
 
 Use this reference list of visual-clue-to-condition associations. Evaluate how clear the clues are relative to how rare the condition is — if in doubt, do not mention it:
@@ -1032,18 +1032,18 @@ export async function analyzeDepthInsights(
     options.timeoutMs,
     PRO_TIMEOUT_MS,
     base64Image,
-    58_000,
+    110_000,
   );
   const totalTimeoutMs = options.videoClipBase64
-    ? Math.min(baseTimeoutMs + 10_000, 72_000)
-    : baseTimeoutMs;
+    ? Math.min(baseTimeoutMs + 30_000, 140_000)
+    : Math.min(baseTimeoutMs, 120_000);
   const hasVideoContext = Boolean(
     options.videoClipBase64 && options.videoMimeType,
   );
 
   // Stage 1: Pro model generates free-form medical analysis (no schema constraints).
-  const stage1TimeoutMs = Math.round(totalTimeoutMs * 0.7);
-  const stage2TimeoutMs = Math.round(totalTimeoutMs * 0.3);
+  const stage1TimeoutMs = Math.round(totalTimeoutMs * 0.82);
+  const stage2TimeoutMs = Math.round(totalTimeoutMs * 0.18);
 
   let freeformText: string;
   let proModel: string;
