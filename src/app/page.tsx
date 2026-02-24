@@ -146,7 +146,7 @@ interface CoverProjection {
   renderHeight: number;
 }
 
-function computeCoverProjection(
+function computeContainProjection(
   video: HTMLVideoElement | null,
   viewportWidth: number,
   viewportHeight: number,
@@ -164,15 +164,15 @@ function computeCoverProjection(
   let offsetY = 0;
 
   if (sourceAspect > viewportAspect) {
-    // Source is wider: fill height and crop left/right.
-    renderHeight = safeHeight;
-    renderWidth = safeHeight * sourceAspect;
-    offsetX = (safeWidth - renderWidth) / 2;
-  } else if (sourceAspect < viewportAspect) {
-    // Source is taller: fill width and crop top/bottom.
+    // Source is wider: match width, calculate height, add top/bottom padding
     renderWidth = safeWidth;
     renderHeight = safeWidth / sourceAspect;
     offsetY = (safeHeight - renderHeight) / 2;
+  } else if (sourceAspect < viewportAspect) {
+    // Source is taller: match height, calculate width, add left/right padding
+    renderHeight = safeHeight;
+    renderWidth = safeHeight * sourceAspect;
+    offsetX = (safeWidth - renderWidth) / 2;
   }
 
   return { offsetX, offsetY, renderWidth, renderHeight };
@@ -402,6 +402,44 @@ export default function Home() {
     proRecording: false,
   });
 
+  const [webcamBrightness, setWebcamBrightness] = useState(1);
+  const [webcamContrast, setWebcamContrast] = useState(1);
+
+  useEffect(() => {
+    if (!cameraReady || !runningRef.current) return;
+    const interval = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = 40;
+      canvas.height = 40;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Sample the center area
+      ctx.drawImage(video, video.videoWidth * 0.25, video.videoHeight * 0.25, video.videoWidth * 0.5, video.videoHeight * 0.5, 0, 0, 40, 40);
+      const data = ctx.getImageData(0, 0, 40, 40).data;
+      let brightness = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        brightness += (0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+      }
+      const avgBrightness = brightness / (data.length / 4) / 255;
+
+      // Aim for ~0.5 brightness
+      if (avgBrightness < 0.35) {
+        setWebcamBrightness(prev => Math.min(prev + 0.05, 2.5));
+      } else if (avgBrightness > 0.65) {
+        setWebcamBrightness(prev => Math.max(prev - 0.05, 0.5));
+      }
+      
+      // Subtle contrast adjustment
+      if (avgBrightness < 0.2) setWebcamContrast(1.3);
+      else if (avgBrightness > 0.8) setWebcamContrast(0.9);
+      else setWebcamContrast(1.1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cameraReady]);
+
   const flashIndices = useMemo<FlashIndexCard[]>(() => {
     if (!flashLegend.length) return [];
     const sorted = [...flashLegend].sort((a, b) => b.confidence - a.confidence);
@@ -591,7 +629,12 @@ export default function Home() {
       canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return null;
+      
+      // Apply the same calibration filters to the captured frame for AI
+      ctx.filter = `brightness(${webcamBrightness}) contrast(${webcamContrast})`;
       ctx.drawImage(video, 0, 0, width, height);
+      ctx.filter = "none";
+
       const encoded = canvas.toDataURL("image/jpeg", profile.jpegQuality).split(",")[1];
       if (!encoded) return null;
 
@@ -705,7 +748,7 @@ export default function Home() {
       const tracked = trackedFrameRef.current;
       const flash = flashResultRef.current;
       const lite = liteResultRef.current;
-      const projection = computeCoverProjection(videoRef.current, width, height);
+      const projection = computeContainProjection(videoRef.current, width, height);
       const faceBox = tracked?.faceBox ?? flash?.faceBox ?? lite?.faceBox;
       let faceCenterX = width / 2;
       let faceCenterY = height / 2;
@@ -1139,7 +1182,13 @@ export default function Home() {
 
         <section className={styles.workspace}>
           <div ref={containerRef} className={styles.stage}>
-            <video ref={videoRef} autoPlay playsInline muted />
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              style={{ filter: `brightness(${webcamBrightness}) contrast(${webcamContrast}) contrast(1.4) brightness(1.2) grayscale(0.2)` }}
+            />
             <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
 
             <canvas ref={liteCaptureCanvasRef} className={styles.captureCanvas} />
