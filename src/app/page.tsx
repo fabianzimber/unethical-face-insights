@@ -340,6 +340,42 @@ export default function Home() {
   const proFirstCaptureAtRef = useRef(0);
   const proFirstRequestStartedRef = useRef(false);
 
+  const audioStateRef = useRef({
+    greetingsPlayed: false,
+    greetingsTime: 0,
+    transmittingPlayed: false,
+    initialResultsPlayed: false,
+    advancedResultsPlayed: false,
+  });
+
+  const playSound = useCallback((type: "greetings" | "transmitting" | "initial" | "advanced") => {
+    const state = audioStateRef.current;
+    
+    const tryPlay = (src: string) => {
+      try {
+        const audio = new Audio(src);
+        audio.play().catch(e => console.log("Audio autoplay blocked or failed:", e));
+      } catch (e) {
+        console.log("Failed to play audio:", e);
+      }
+    };
+
+    if (type === "greetings" && !state.greetingsPlayed) {
+      state.greetingsPlayed = true;
+      state.greetingsTime = Date.now();
+      tryPlay("/greetings.mp3");
+    } else if (type === "transmitting" && !state.transmittingPlayed) {
+      state.transmittingPlayed = true;
+      tryPlay("/transmitting.mp3");
+    } else if (type === "initial" && !state.initialResultsPlayed) {
+      state.initialResultsPlayed = true;
+      tryPlay("/initial_results.mp3");
+    } else if (type === "advanced" && !state.advancedResultsPlayed) {
+      state.advancedResultsPlayed = true;
+      tryPlay("/advanced_results.mp3");
+    }
+  }, []);
+
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [trackerReady, setTrackerReady] = useState(false);
@@ -479,6 +515,7 @@ export default function Home() {
       .then((data) => {
         if (cancelled || !data) return;
         setRole(data.role);
+        playSound("greetings");
         startWebcam();
       })
       .catch(() => {
@@ -903,6 +940,10 @@ export default function Home() {
         }
         flashResultRef.current = effectiveResult;
 
+        if (hasUsableFlashEmotionPayload(effectiveResult)) {
+          playSound("initial");
+        }
+
         const legendSource = shouldKeepPrevious ? previousFlash?.emotions ?? [] : nextResult.emotions ?? [];
         const dedupedLegend = dedupeFlashLegend(
           [...legendSource]
@@ -994,6 +1035,7 @@ export default function Home() {
           setProError("no-insights");
         } else {
           setProError(null);
+          playSound("advanced");
         }
         proResultRef.current = usableInsights || !proResultRef.current ? envelope.result : proResultRef.current;
         setProLegend((previous) => (usableInsights ? dedupedInsights : previous));
@@ -1049,6 +1091,20 @@ export default function Home() {
   const faceLocked = liteResultRef.current?.faceDetected || flashResultRef.current?.faceDetected;
   const primaryLabel = (primaryEmotion.label || "neutral").slice(0, 64);
   const primaryConfidenceText = formatPercent(primaryEmotion.confidence);
+
+  useEffect(() => {
+    if (!faceLocked) return;
+    const state = audioStateRef.current;
+    if (!state.transmittingPlayed) {
+      const timeSinceGreetings = Date.now() - state.greetingsTime;
+      if (timeSinceGreetings >= 4000) {
+        playSound("transmitting");
+      } else {
+        const tid = setTimeout(() => playSound("transmitting"), 4000 - timeSinceGreetings);
+        return () => clearTimeout(tid);
+      }
+    }
+  }, [faceLocked, playSound]);
 
   if (hasPermission === false) {
     return (
