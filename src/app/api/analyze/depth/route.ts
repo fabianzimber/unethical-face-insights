@@ -31,9 +31,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Depth analysis failed";
+    const lc = message.toLowerCase();
     let status = 500;
-    if (message.includes("aborted")) status = 499;
-    else if (message.includes("busy")) status = 429;
+    if (lc.includes("aborted")) status = 499;
+    else if (lc.includes("busy") || lc.includes("quota") || lc.includes("resource_exhausted") || lc.includes("rate limit")) status = 429;
     return NextResponse.json({ error: message }, { status });
   }
 }

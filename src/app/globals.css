@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 html,
@@ -10,17 +10,18 @@ body {
 }
 
 body {
-  color: #0b1728;
-  background-color: #eef2f5;
-  background-image:
-    radial-gradient(circle at 12% 0%, rgba(25, 41, 61, 0.045) 0%, transparent 52%),
-    linear-gradient(180deg, #f6f8fa 0%, #eef2f5 56%, #e9edf1 100%);
-  font-family: "Manrope", -apple-system, "Segoe UI", sans-serif;
-  font-weight: 560;
-  letter-spacing: 0.004em;
-  line-height: 1.35;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  color: #000000;
+  background-color: #ffffff;
+  background-image: 
+    linear-gradient(#000000 2px, transparent 2px),
+    linear-gradient(90deg, #000000 2px, transparent 2px);
+  background-size: 80px 80px;
+  background-position: -2px -2px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1.1;
+  -webkit-font-smoothing: none;
   text-rendering: optimizeLegibility;
 }
 
@@ -30,9 +31,10 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Manrope", -apple-system, "Segoe UI", sans-serif;
-  font-weight: 760;
-  letter-spacing: -0.01em;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  text-transform: uppercase;
 }
 
 * {

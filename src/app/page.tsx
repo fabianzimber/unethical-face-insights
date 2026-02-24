@@ -41,6 +41,7 @@ interface HudState {
   litePending: boolean;
   flashPending: boolean;
   proPending: boolean;
+  proRecording: boolean;
 }
 
 interface CaptureProfile {
@@ -79,6 +80,7 @@ const PRO_FIRST_PRE_CAPTURE_WAIT_MS = 5000;
 const PRO_VIDEO_CLIP_MS = 5000;
 const PRO_VIDEO_MAX_BASE64_LENGTH = 8_000_000;
 const PRO_EMPTY_RESULT_RETRY_MS = 3500;
+const PRO_RATE_LIMIT_RETRY_MS = 120_000;
 const PRO_VIDEO_MIME_CANDIDATES = [
   "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp8,opus",
@@ -205,17 +207,8 @@ function drawRoundedRect(
   height: number,
   radius: number,
 ): void {
-  const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.rect(x, y, width, height);
   ctx.closePath();
 }
 
@@ -313,6 +306,7 @@ function hasUsableProInsights(insights: DepthAnalysisResult["insights"]): boolea
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRailRef = useRef<HTMLDivElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const liteCaptureCanvasRef = useRef<HTMLCanvasElement>(null);
   const flashCaptureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -355,6 +349,7 @@ export default function Home() {
   const [primaryMoodSentence, setPrimaryMoodSentence] = useState("Layer 1 is initializing mood interpretation.");
   const [flashLegend, setFlashLegend] = useState<Array<{ emotion: string; confidence: number; explanation?: string; intensity?: string }>>([]);
   const [proLegend, setProLegend] = useState<DepthAnalysisResult["insights"]>([]);
+  const [proError, setProError] = useState<"rate-limited" | "error" | null>(null);
   const [hud, setHud] = useState<HudState>({
     liteMs: 0,
     flashMs: 0,
@@ -362,6 +357,7 @@ export default function Home() {
     litePending: false,
     flashPending: false,
     proPending: false,
+    proRecording: false,
   });
 
   const flashIndices = useMemo<FlashIndexCard[]>(() => {
@@ -413,9 +409,9 @@ export default function Home() {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: CAMERA_TARGET_FPS, max: CAMERA_TARGET_FPS },
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+          frameRate: { ideal: 30 },
         },
         audio: false,
       });
@@ -456,6 +452,18 @@ export default function Home() {
       video.removeEventListener("emptied", onEnded);
       video.removeEventListener("pause", onEnded);
     };
+  }, []);
+
+  useEffect(() => {
+    const stage = containerRef.current;
+    const rail = panelRailRef.current;
+    if (!stage || !rail) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) rail.style.maxHeight = `${Math.round(entry.contentRect.height)}px`;
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -633,8 +641,8 @@ export default function Home() {
       ctx.clearRect(0, 0, width, height);
 
       const corner = Math.max(18, Math.min(width, height) * 0.045);
-      ctx.strokeStyle = "rgba(0, 238, 168, 0.62)";
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "#FF0000";
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(10, corner);
       ctx.lineTo(10, 10);
@@ -661,12 +669,31 @@ export default function Home() {
         const box = faceBoxToPixels(faceBox, projection);
         faceCenterX = box.x + box.w / 2;
         faceCenterY = box.y + box.h / 2;
-        ctx.strokeStyle = "rgba(0, 238, 168, 0.96)";
-        ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#FF0000";
+        ctx.fillStyle = "transparent";
+        ctx.lineWidth = 4;
         drawRoundedRect(ctx, box.x, box.y, box.w, box.h, 7);
         ctx.fill();
         ctx.stroke();
+      }
+
+      // Draw tracked landmark points with semi-transparent dots
+      if (tracked?.points) {
+        ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+        for (const pt of tracked.points) {
+          const pixelPt = toPixels(pt.point, projection);
+          ctx.beginPath();
+          ctx.arc(pixelPt.x, pixelPt.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (flash?.landmarks) {
+        ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+        for (const pt of flash.landmarks) {
+          const pixelPt = toPixels(pt.point, projection);
+          ctx.beginPath();
+          ctx.arc(pixelPt.x, pixelPt.y, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       const projectedAnchors = fusionRef.current.project(tracked, nowMs, { preserveStale: pendingRef.current.flash });
@@ -679,7 +706,7 @@ export default function Home() {
         .slice(0, MAX_VISIBLE_EMOTION_TAGS);
       if (!visibleAnchors.length) return;
 
-      const emotionFont = '700 11px "Manrope", ui-sans-serif, system-ui, sans-serif';
+      const emotionFont = '800 12px "IBM Plex Mono", ui-monospace, monospace';
       ctx.font = emotionFont;
       const items = visibleAnchors.map((anchor) => {
         const point = toPixels(
@@ -719,25 +746,25 @@ export default function Home() {
         const edge = nearestPointOnRect(item.point.x, item.point.y, placed.x, placed.y, placed.width, placed.height);
 
         ctx.globalAlpha = alpha;
-        ctx.strokeStyle = "rgba(0, 245, 178, 0.72)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(item.point.x, item.point.y);
         ctx.lineTo(edge.x, edge.y);
         ctx.stroke();
 
-        ctx.fillStyle = "rgba(0, 255, 194, 0.85)";
+        ctx.fillStyle = "#FF0000";
         ctx.beginPath();
         ctx.arc(item.point.x, item.point.y, 2.2, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = "rgba(9, 14, 25, 0.92)";
-        ctx.strokeStyle = "rgba(0, 238, 168, 0.88)";
+        ctx.fillStyle = "#000000";
+        ctx.strokeStyle = "#FF0000";
         drawRoundedRect(ctx, placed.x, placed.y, placed.width, placed.height, 8);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = "rgba(241, 250, 255, 0.96)";
+        ctx.fillStyle = "#FFFFFF";
         ctx.textBaseline = "middle";
         ctx.font = emotionFont;
         ctx.fillText(item.text, placed.x + 7, placed.y + placed.height / 2);
@@ -923,7 +950,9 @@ export default function Home() {
       if (warmupMs > 0) return void scheduleLane("pro", warmupMs + 64);
       const payload = captureFrame("pro");
       if (!payload) return void scheduleLane("pro", LANE_INTERVAL_MS.pro);
+      setHud((previous) => ({ ...previous, proRecording: true }));
       const videoClipPayload = await captureProVideoClip();
+      setHud((previous) => ({ ...previous, proRecording: false }));
       if (!runningRef.current) return;
 
       pendingRef.current.pro = true;
@@ -945,7 +974,13 @@ export default function Home() {
           body: JSON.stringify({ ...payload, ...videoClipPayload, frameId }),
         });
         if (!response.ok) {
-          retryDelayOverrideMs = PRO_EMPTY_RESULT_RETRY_MS;
+          if (response.status === 429) {
+            setProError("rate-limited");
+            retryDelayOverrideMs = PRO_RATE_LIMIT_RETRY_MS;
+          } else {
+            setProError("error");
+            retryDelayOverrideMs = PRO_EMPTY_RESULT_RETRY_MS;
+          }
           return;
         }
         const envelope = (await response.json()) as AnalysisEnvelope<DepthAnalysisResult>;
@@ -956,6 +991,8 @@ export default function Home() {
         const usableInsights = hasUsableProInsights(dedupedInsights);
         if (!usableInsights) {
           retryDelayOverrideMs = isFirstProRequest ? 2200 : PRO_EMPTY_RESULT_RETRY_MS;
+        } else {
+          setProError(null);
         }
         proResultRef.current = usableInsights || !proResultRef.current ? envelope.result : proResultRef.current;
         setProLegend((previous) => (usableInsights ? dedupedInsights : previous));
@@ -966,10 +1003,13 @@ export default function Home() {
         setHud((previous) => ({ ...previous, proMs: Math.round(nextMs) }));
       } catch (error) {
         retryDelayOverrideMs = PRO_EMPTY_RESULT_RETRY_MS;
-        if (!(error instanceof Error) || error.name !== "AbortError") console.error("Pro loop error:", error);
+        if (!(error instanceof Error) || error.name !== "AbortError") {
+          console.error("Pro loop error:", error);
+          setProError("error");
+        }
       } finally {
         pendingRef.current.pro = false;
-        setHud((previous) => ({ ...previous, proPending: false }));
+        setHud((previous) => ({ ...previous, proPending: false, proRecording: false }));
         proAbortRef.current = null;
         if (retryDelayOverrideMs !== null) scheduleLane("pro", retryDelayOverrideMs);
         else scheduleLaneFromCycle("pro", startedAt, 200);
@@ -1033,8 +1073,6 @@ export default function Home() {
           </p>
         </header>
 
-        {role === 'owner' && <InviteGenerator />}
-
         <section className={styles.workspace}>
           <div ref={containerRef} className={styles.stage}>
             <video ref={videoRef} autoPlay playsInline muted />
@@ -1066,9 +1104,14 @@ export default function Home() {
                   Flash {formatLatency(hud.flashMs)}
                   {hud.flashPending ? " • pending" : ""}
                 </span>
-                <span className={styles.statusChip}>
-                  Pro {formatLatency(hud.proMs)}
-                  {hud.proPending ? " • pending" : ""}
+                <span className={`${styles.statusChip}${proError ? ` ${styles.statusChipWarn}` : ""}`}>
+                  {proError === "rate-limited"
+                    ? "Pro • rate limited"
+                    : proError === "error"
+                      ? "Pro • error"
+                      : hud.proRecording
+                        ? "Pro • recording"
+                        : `Pro ${formatLatency(hud.proMs)}${hud.proPending ? " • pending" : ""}`}
                 </span>
               </div>
             </div>
@@ -1086,7 +1129,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={styles.panelRail}>
+          <div ref={panelRailRef} className={styles.panelRail}>
             <aside className={styles.panel}>
               <h2 className={styles.panelTitle}>Layer 2 - Flash Basic</h2>
               <p className={styles.panelSubtitle}>Emotion and fatigue-oriented cue extraction with dominance and clarity indices.</p>
@@ -1174,6 +1217,8 @@ export default function Home() {
             )}
           </aside>
         </section>
+
+        {role === 'owner' && <InviteGenerator />}
       </div>
     </main>
   );

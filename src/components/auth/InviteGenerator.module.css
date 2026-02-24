@@ -1,17 +1,17 @@
 .container {
-  border: 4px solid #0b1728;
-  background-color: #eef2f5;
-  color: #0b1728;
+  border: 4px solid #000000;
+  background-color: #ffffff;
+  color: #000000;
   font-family: 'IBM Plex Mono', monospace;
   margin-bottom: 2rem;
-  box-shadow: 8px 8px 0 rgba(11, 23, 40, 0.1);
+  box-shadow: 16px 16px 0px #000000;
 }
 
 .header {
-  border-bottom: 4px solid #0b1728;
+  border-bottom: 4px solid #000000;
   padding: 0.5rem 1rem;
-  background-color: #0b1728;
-  color: #eef2f5;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 .title {
@@ -41,8 +41,8 @@
 
 .generateBtn {
   background-color: transparent;
-  color: #0b1728;
-  border: 4px solid #0b1728;
+  color: #000000;
+  border: 4px solid #000000;
   padding: 1rem;
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 700;
@@ -53,8 +53,8 @@
 }
 
 .generateBtn:hover:not(:disabled) {
-  background-color: #0b1728;
-  color: #eef2f5;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 .generateBtn:disabled {
@@ -81,9 +81,9 @@
 }
 
 .resultBox:hover {
-  background-color: #0b1728;
-  color: #eef2f5;
-  border-color: #0b1728;
+  background-color: #000000;
+  color: #ffffff;
+  border-color: #000000;
 }
 
 .resultBox:hover .copyStatus {

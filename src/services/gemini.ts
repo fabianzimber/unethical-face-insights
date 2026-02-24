@@ -25,8 +25,8 @@ const PRO_TIMEOUT_MS = 45_000;
 const PRIMARY_EMOTION_MAX_CHARS = 64;
 
 const LITE_COOLDOWN_MS = 450;
-const FLASH_COOLDOWN_MS = 3_200;
-const PRO_COOLDOWN_MS = 45_000;
+const FLASH_COOLDOWN_MS = 6_000;
+const PRO_COOLDOWN_MS = 120_000;
 const GATE_POLL_MS = 24;
 const GATE_MAX_WAIT_MS = 16_000;
 
@@ -34,7 +34,7 @@ type LaneName = "lite" | "flash" | "pro";
 
 interface GenerationConfigLike {
   responseMimeType: string;
-  responseSchema: unknown;
+  responseSchema?: unknown;
   candidateCount?: number;
   temperature?: number;
   topP?: number;
@@ -71,10 +71,17 @@ function getClient(): GoogleGenAI {
   return aiClient;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
   });
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
@@ -129,7 +136,11 @@ function releaseGate(model: string): void {
   gate.lastCompletedAt = Date.now();
 }
 
-function logApiError(label: string, error: unknown, context?: Record<string, unknown>): void {
+function logApiError(
+  label: string,
+  error: unknown,
+  context?: Record<string, unknown>,
+): void {
   const ts = new Date().toISOString();
   const parts: string[] = [`[${ts}] ${label} failed`];
   if (error && typeof error === "object") {
@@ -192,10 +203,17 @@ function toConfidence(value: unknown, fallback = 0): number {
   return fallback;
 }
 
-function toPoint(value: unknown, fallback: NormalizedPoint = [500, 500]): NormalizedPoint {
+function toPoint(
+  value: unknown,
+  fallback: NormalizedPoint = [500, 500],
+): NormalizedPoint {
   if (!Array.isArray(value) || value.length < 2) return fallback;
-  const y = isNumber(value[0]) ? clamp(Math.round(value[0]), 0, 1000) : fallback[0];
-  const x = isNumber(value[1]) ? clamp(Math.round(value[1]), 0, 1000) : fallback[1];
+  const y = isNumber(value[0])
+    ? clamp(Math.round(value[0]), 0, 1000)
+    : fallback[0];
+  const x = isNumber(value[1])
+    ? clamp(Math.round(value[1]), 0, 1000)
+    : fallback[1];
   return [y, x];
 }
 
@@ -243,7 +261,10 @@ function toFacialPart(value: unknown): FacialPartHint {
   }
 }
 
-const FACIAL_PART_DEFAULT_POINTS: Record<Exclude<FacialPartHint, "unknown">, NormalizedPoint> = {
+const FACIAL_PART_DEFAULT_POINTS: Record<
+  Exclude<FacialPartHint, "unknown">,
+  NormalizedPoint
+> = {
   leftEye: [370, 330],
   rightEye: [370, 670],
   leftEyeInner: [375, 430],
@@ -273,7 +294,10 @@ function defaultPointForPart(part: FacialPartHint): NormalizedPoint {
   return FACIAL_PART_DEFAULT_POINTS.faceCenter;
 }
 
-function nearestLandmarkPart(point: NormalizedPoint, landmarks: FastLandmark[]): FacialPartHint {
+function nearestLandmarkPart(
+  point: NormalizedPoint,
+  landmarks: FastLandmark[],
+): FacialPartHint {
   if (!landmarks.length) return "unknown";
   let best: FastLandmark | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
@@ -296,7 +320,9 @@ function buildFastAnchors(
   const duplicateCounters = new Map<string, number>();
   const emotionAnchors: SemanticAnchor[] = emotions.map((emotion) => {
     const resolvedPart =
-      emotion.facialPart === "unknown" ? nearestLandmarkPart(emotion.point, landmarks) : emotion.facialPart;
+      emotion.facialPart === "unknown"
+        ? nearestLandmarkPart(emotion.point, landmarks)
+        : emotion.facialPart;
     const emotionKey = emotion.emotion.toLowerCase().replace(/\s+/g, "-");
     const baseKey = `${emotionKey}-${resolvedPart}`;
     const seen = duplicateCounters.get(baseKey) ?? 0;
@@ -313,18 +339,22 @@ function buildFastAnchors(
       explanation: emotion.explanation,
     };
   });
-  const landmarkAnchors: SemanticAnchor[] = landmarks.slice(0, 8).map((landmark, index) => ({
-    id: `lm-${index}-${landmark.name.toLowerCase().replace(/\s+/g, "-")}`,
-    label: landmark.name,
-    kind: "landmark",
-    facialPart: landmark.facialPart,
-    point: landmark.point,
-    confidence: landmark.confidence,
-  }));
+  const landmarkAnchors: SemanticAnchor[] = landmarks
+    .slice(0, 8)
+    .map((landmark, index) => ({
+      id: `lm-${index}-${landmark.name.toLowerCase().replace(/\s+/g, "-")}`,
+      label: landmark.name,
+      kind: "landmark",
+      facialPart: landmark.facialPart,
+      point: landmark.point,
+      confidence: landmark.confidence,
+    }));
   return [...emotionAnchors, ...landmarkAnchors];
 }
 
-function buildDepthAnchors(insights: DepthAnalysisResult["insights"]): SemanticAnchor[] {
+function buildDepthAnchors(
+  insights: DepthAnalysisResult["insights"],
+): SemanticAnchor[] {
   return insights.map((insight, index) => ({
     id: `depth-${index}-${insight.keyword.toLowerCase().replace(/\s+/g, "-")}`,
     label: insight.keyword,
@@ -335,7 +365,10 @@ function buildDepthAnchors(insights: DepthAnalysisResult["insights"]): SemanticA
   }));
 }
 
-function toDefaultLiteResult(options: AnalyzeOptions, model = LITE_MODEL): LiteAnalysisResult {
+function toDefaultLiteResult(
+  options: AnalyzeOptions,
+  model = LITE_MODEL,
+): LiteAnalysisResult {
   return {
     model,
     frameId: options.frameId ?? 0,
@@ -349,7 +382,10 @@ function toDefaultLiteResult(options: AnalyzeOptions, model = LITE_MODEL): LiteA
   };
 }
 
-function toDefaultFlashResult(options: AnalyzeOptions, model = FLASH_MODEL): FastAnalysisResult {
+function toDefaultFlashResult(
+  options: AnalyzeOptions,
+  model = FLASH_MODEL,
+): FastAnalysisResult {
   return {
     model,
     frameId: options.frameId ?? 0,
@@ -362,7 +398,10 @@ function toDefaultFlashResult(options: AnalyzeOptions, model = FLASH_MODEL): Fas
   };
 }
 
-function toDefaultDepthResult(options: AnalyzeOptions, model = PRO_MODEL): DepthAnalysisResult {
+function toDefaultDepthResult(
+  options: AnalyzeOptions,
+  model = PRO_MODEL,
+): DepthAnalysisResult {
   return {
     model,
     frameId: options.frameId ?? 0,
@@ -374,13 +413,23 @@ function toDefaultDepthResult(options: AnalyzeOptions, model = PRO_MODEL): Depth
   };
 }
 
-function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string): LiteAnalysisResult {
-  if (!raw || typeof raw !== "object") return toDefaultLiteResult(options, model);
+function sanitizeLiteResult(
+  raw: unknown,
+  options: AnalyzeOptions,
+  model: string,
+): LiteAnalysisResult {
+  if (!raw || typeof raw !== "object")
+    return toDefaultLiteResult(options, model);
   const source = raw as Record<string, unknown>;
   const faceBox = toFaceBox(source.faceBox);
   const faceDetected = Boolean(source.faceDetected) || Boolean(faceBox);
-  const frameConfidence = toConfidence(source.confidence, faceDetected ? 0.7 : 0.1);
-  const candidates: LiteAnalysisResult["candidates"] = Array.isArray(source.candidates)
+  const frameConfidence = toConfidence(
+    source.confidence,
+    faceDetected ? 0.7 : 0.1,
+  );
+  const candidates: LiteAnalysisResult["candidates"] = Array.isArray(
+    source.candidates,
+  )
     ? source.candidates.slice(0, 6).map((item) => {
         const record = item as Record<string, unknown>;
         return {
@@ -391,14 +440,20 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
     : [];
 
   const primaryEmotion = (
-    toStringOrFallback(source.primaryEmotion, "") || candidates[0]?.emotion || "neutral"
+    toStringOrFallback(source.primaryEmotion, "") ||
+    candidates[0]?.emotion ||
+    "neutral"
   ).slice(0, PRIMARY_EMOTION_MAX_CHARS);
   const primaryCandidate = candidates.find(
-    (candidate) => candidate.emotion.trim().toLowerCase() === primaryEmotion.trim().toLowerCase(),
+    (candidate) =>
+      candidate.emotion.trim().toLowerCase() ===
+      primaryEmotion.trim().toLowerCase(),
   );
   const primaryConfidence = toConfidence(
     source.primaryConfidence,
-    primaryCandidate?.confidence ?? candidates[0]?.confidence ?? frameConfidence,
+    primaryCandidate?.confidence ??
+      candidates[0]?.confidence ??
+      frameConfidence,
   );
   const moodSentence =
     toStringOrFallback(source.moodSentence, "").slice(0, 180) ||
@@ -407,13 +462,25 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
     source.headPose && typeof source.headPose === "object"
       ? {
           pitch: isNumber((source.headPose as Record<string, unknown>).pitch)
-            ? clamp((source.headPose as Record<string, unknown>).pitch as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).pitch as number,
+                -90,
+                90,
+              )
             : 0,
           yaw: isNumber((source.headPose as Record<string, unknown>).yaw)
-            ? clamp((source.headPose as Record<string, unknown>).yaw as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).yaw as number,
+                -90,
+                90,
+              )
             : 0,
           roll: isNumber((source.headPose as Record<string, unknown>).roll)
-            ? clamp((source.headPose as Record<string, unknown>).roll as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).roll as number,
+                -90,
+                90,
+              )
             : 0,
         }
       : undefined;
@@ -433,12 +500,19 @@ function sanitizeLiteResult(raw: unknown, options: AnalyzeOptions, model: string
   };
 }
 
-function sanitizeFlashResult(raw: unknown, options: AnalyzeOptions, model: string): FastAnalysisResult {
-  if (!raw || typeof raw !== "object") return toDefaultFlashResult(options, model);
+function sanitizeFlashResult(
+  raw: unknown,
+  options: AnalyzeOptions,
+  model: string,
+): FastAnalysisResult {
+  if (!raw || typeof raw !== "object")
+    return toDefaultFlashResult(options, model);
   const source = raw as Record<string, unknown>;
   const landmarks: FastAnalysisResult["landmarks"] = [];
 
-  const emotions: FastAnalysisResult["emotions"] = Array.isArray(source.emotions)
+  const emotions: FastAnalysisResult["emotions"] = Array.isArray(
+    source.emotions,
+  )
     ? source.emotions.slice(0, 6).map((item) => {
         const record = item as Record<string, unknown>;
         const parsedPart = toFacialPart(record?.facialPart);
@@ -449,24 +523,39 @@ function sanitizeFlashResult(raw: unknown, options: AnalyzeOptions, model: strin
           confidence: toConfidence(record?.confidence, 0.4),
           point: toPoint(record?.point, defaultPointForPart(facialPart)),
           facialPart,
-          explanation: toStringOrFallback(record?.explanation, "").slice(0, 120) || undefined,
+          explanation:
+            toStringOrFallback(record?.explanation, "").slice(0, 120) ||
+            undefined,
         };
       })
     : [];
 
   const faceBox = toFaceBox(source.faceBox);
-  const faceDetected = Boolean(source.faceDetected) || Boolean(faceBox) || landmarks.length > 0;
+  const faceDetected =
+    Boolean(source.faceDetected) || Boolean(faceBox) || landmarks.length > 0;
   const headPose =
     source.headPose && typeof source.headPose === "object"
       ? {
           pitch: isNumber((source.headPose as Record<string, unknown>).pitch)
-            ? clamp((source.headPose as Record<string, unknown>).pitch as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).pitch as number,
+                -90,
+                90,
+              )
             : 0,
           yaw: isNumber((source.headPose as Record<string, unknown>).yaw)
-            ? clamp((source.headPose as Record<string, unknown>).yaw as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).yaw as number,
+                -90,
+                90,
+              )
             : 0,
           roll: isNumber((source.headPose as Record<string, unknown>).roll)
-            ? clamp((source.headPose as Record<string, unknown>).roll as number, -90, 90)
+            ? clamp(
+                (source.headPose as Record<string, unknown>).roll as number,
+                -90,
+                90,
+              )
             : 0,
         }
       : undefined;
@@ -487,16 +576,26 @@ function sanitizeFlashResult(raw: unknown, options: AnalyzeOptions, model: strin
   return result;
 }
 
-function sanitizeDepthResult(raw: unknown, options: AnalyzeOptions, model: string): DepthAnalysisResult {
-  if (!raw || typeof raw !== "object") return toDefaultDepthResult(options, model);
+function sanitizeDepthResult(
+  raw: unknown,
+  options: AnalyzeOptions,
+  model: string,
+): DepthAnalysisResult {
+  if (!raw || typeof raw !== "object")
+    return toDefaultDepthResult(options, model);
   const source = raw as Record<string, unknown>;
-  const insights: DepthAnalysisResult["insights"] = Array.isArray(source.insights)
+  const insights: DepthAnalysisResult["insights"] = Array.isArray(
+    source.insights,
+  )
     ? source.insights.slice(0, 10).map((item) => {
         const record = item as Record<string, unknown>;
         return {
           keyword: toStringOrFallback(record?.keyword, "neutral"),
           rationale: toStringOrFallback(record?.rationale, ""),
-          medicalInterpretation: toStringOrFallback(record?.medicalInterpretation, ""),
+          medicalInterpretation: toStringOrFallback(
+            record?.medicalInterpretation,
+            "",
+          ),
           confidence: toConfidence(record?.confidence, 0.34),
           facialPart: toFacialPart(record?.facialPart),
           point: toPoint(record?.point),
@@ -524,16 +623,36 @@ function shouldFallbackModelError(error: unknown): boolean {
   const message = typeof e.message === "string" ? e.message.toLowerCase() : "";
   const code = typeof e.code === "string" ? e.code.toLowerCase() : "";
 
+  // Rate-limit / quota exhaustion: all models in the lane share the same quota,
+  // so trying fallbacks is pointless and just burns more requests.
+  if (status === 429) return false;
+  if (message.includes("quota") || message.includes("resource_exhausted") || message.includes("rate limit")) return false;
+
   if (status === 404) return true;
-  if (status === 400 && /(model|unknown|unsupported|not found|invalid)/i.test(message)) return true;
-  if (/(model|unknown|unsupported|not found|does not exist|invalid model)/i.test(message)) return true;
+  if (
+    status === 400 &&
+    /(model|unknown|unsupported|not found|invalid)/i.test(message)
+  )
+    return true;
+  if (
+    /(model|unknown|unsupported|not found|does not exist|invalid model)/i.test(
+      message,
+    )
+  )
+    return true;
   if (/(not_found|model_not_found|unsupported)/i.test(code)) return true;
   return false;
 }
 
-function candidateModels(lane: LaneName, preferred: string, fallbacks: string[]): string[] {
+function candidateModels(
+  lane: LaneName,
+  preferred: string,
+  fallbacks: string[],
+): string[] {
   const resolved = resolvedLaneModels[lane];
-  const models = [resolved, preferred, ...fallbacks].filter((item): item is string => Boolean(item));
+  const models = [resolved, preferred, ...fallbacks].filter(
+    (item): item is string => Boolean(item),
+  );
   return [...new Set(models)];
 }
 
@@ -542,12 +661,18 @@ async function generateWithLaneFallback(args: {
   label: string;
   preferredModel: string;
   fallbackModels: string[];
-  contents: Array<{ inlineData: { data: string; mimeType: string } } | { text: string }>;
+  contents: Array<
+    { inlineData: { data: string; mimeType: string } } | { text: string }
+  >;
   config: GenerationConfigLike;
   timeoutMs: number;
   context?: Record<string, unknown>;
 }): Promise<{ text: string; model: string }> {
-  const models = candidateModels(args.lane, args.preferredModel, args.fallbackModels);
+  const models = candidateModels(
+    args.lane,
+    args.preferredModel,
+    args.fallbackModels,
+  );
   let lastError: unknown = null;
 
   for (const model of models) {
@@ -609,24 +734,20 @@ Return only JSON with:
 - do not output point coordinates
 The explanation must be short (max 10 words).`;
 
-const PRO_PROMPT = `Provide an in-depth facial interpretation for one primary face.
-Try to infer medically relevant possibilities from visible facial cues only.
-Return only JSON with:
-{
-  "confidence": number,
-  "summary": "2-4 sentence overall summary",
-  "insights": [
-    {
-      "keyword": "...",
-      "rationale": "3-6 sentences describing concrete observed visual clues and why they matter",
-      "medicalInterpretation": "5-10 sentences including: 1) what the condition/pattern is, 2) why it can happen (mechanism), 3) why this face could match, 4) key uncertainty or alternative explanation",
-      "confidence": number,
-      "facialPart": "leftEye|rightEye|nose|mouth|leftBrow|rightBrow|chin|forehead|faceCenter",
-      "point": [y, x]
-    }
-  ]
-}
-Additionally you can improve your medical interpretation with this list of potential associations between visual clues and medical conditions. Evaluate how clear the clues are compared to how rare the condition is and in case of doubt do not mention the condition:
+const PRO_FREEFORM_PROMPT = `You are a medical facial analysis specialist. Provide an in-depth interpretation of the primary face in this image.
+
+Write a detailed, free-form analysis covering:
+
+1. OVERALL IMPRESSION: Start with a 2-4 sentence summary of what you observe overall.
+
+2. DETAILED INSIGHTS: For each notable observation (up to 8), write a thorough analysis that includes:
+   - A short keyword or label for the observation (e.g. "periorbital darkening", "brow tension", "lip pallor")
+   - Which facial area it relates to (eyes, nose, mouth, brows, chin, forehead, cheeks, or general face)
+   - RATIONALE: 3-6 sentences describing the concrete visual clues you see and why they matter
+   - MEDICAL INTERPRETATION: 5-10 sentences covering: what the condition/pattern is, why it can happen (mechanism), why this face could match, and key uncertainties or alternative explanations
+   - Your confidence level (low / medium / high)
+
+Use this reference list of visual-clue-to-condition associations. Evaluate how clear the clues are relative to how rare the condition is — if in doubt, do not mention it:
 puffy eyes → fatigue / allergies (common)
 dark circles under eyes → fatigue / iron deficiency (common)
 yellowish skin or sclera → jaundice / liver dysfunction (uncommon)
@@ -647,14 +768,39 @@ periorbital edema (swelling around eyes) → allergies / hypothyroidism (common 
 telangiectasia (visible small blood vessels on face) → rosacea (common)
 blueish lips or nasolabial area → low oxygen / heart or lung disease (rare in mild cases; very rare as isolated facial sign)
 asymmetrical smile or mouth droop → stroke (very rare)
-Limit to up to 8 insights.
+
 Important:
 - Be specific, clinically descriptive, and cautious.
 - Do not claim diagnosis certainty.
-- Keep output JSON only, but do not compress explanations into short phrases.`;
+- Write naturally and thoroughly — do not compress explanations into short phrases.
+- Do not use markdown formatting. Write in plain text with clear section labels.`;
+
+const PRO_STRUCTURING_PROMPT = `Extract and structure the following facial analysis into JSON.
+Preserve the original rationale and medical interpretation text as faithfully as possible — do not summarize or shorten them.
+
+For each insight, determine which facialPart it refers to based on the facial area mentioned.
+Assign a numeric confidence between 0 and 1 (low ≈ 0.2-0.4, medium ≈ 0.4-0.7, high ≈ 0.7-0.95).
+Assign a point as [y, x] coordinates in 0..1000 normalized space based on the facial part.
+
+Use these approximate point positions:
+leftEye: [370, 330], rightEye: [370, 670], nose: [520, 500], mouth: [700, 500],
+leftBrow: [300, 320], rightBrow: [300, 680], chin: [880, 500], forehead: [165, 500],
+leftCheek: [560, 290], rightCheek: [560, 710], faceCenter: [470, 500]
+
+Here is the analysis to structure:
+
+`;
 
 const LITE_SCHEMA = {
   type: Type.OBJECT,
+  required: [
+    "faceDetected",
+    "confidence",
+    "primaryEmotion",
+    "primaryConfidence",
+    "moodSentence",
+    "candidates",
+  ],
   properties: {
     faceDetected: { type: Type.BOOLEAN },
     confidence: { type: Type.NUMBER },
@@ -677,6 +823,7 @@ const LITE_SCHEMA = {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
+        required: ["emotion", "confidence"],
         properties: {
           emotion: { type: Type.STRING },
           confidence: { type: Type.NUMBER },
@@ -688,6 +835,7 @@ const LITE_SCHEMA = {
 
 const FLASH_SCHEMA = {
   type: Type.OBJECT,
+  required: ["faceDetected", "confidence", "emotions"],
   properties: {
     faceDetected: { type: Type.BOOLEAN },
     confidence: { type: Type.NUMBER },
@@ -707,6 +855,7 @@ const FLASH_SCHEMA = {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
+        required: ["emotion", "confidence", "facialPart"],
         properties: {
           emotion: { type: Type.STRING },
           intensity: { type: Type.STRING },
@@ -721,6 +870,7 @@ const FLASH_SCHEMA = {
 
 const PRO_SCHEMA = {
   type: Type.OBJECT,
+  required: ["confidence", "summary", "insights"],
   properties: {
     confidence: { type: Type.NUMBER },
     summary: { type: Type.STRING },
@@ -728,6 +878,13 @@ const PRO_SCHEMA = {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
+        required: [
+          "keyword",
+          "rationale",
+          "medicalInterpretation",
+          "confidence",
+          "facialPart",
+        ],
         properties: {
           keyword: { type: Type.STRING },
           rationale: { type: Type.STRING },
@@ -745,9 +902,9 @@ const LITE_GENERATION_CONFIG: GenerationConfigLike = {
   responseMimeType: "application/json",
   responseSchema: LITE_SCHEMA,
   candidateCount: 1,
-  temperature: 0.1,
-  topP: 0.72,
-  maxOutputTokens: 240,
+  temperature: 0.2,
+  topP: 0.76,
+  maxOutputTokens: 360,
   thinkingConfig: {
     thinkingBudget: 0,
   },
@@ -757,28 +914,44 @@ const FLASH_GENERATION_CONFIG: GenerationConfigLike = {
   responseMimeType: "application/json",
   responseSchema: FLASH_SCHEMA,
   candidateCount: 1,
-  temperature: 0.08,
-  topP: 0.68,
-  maxOutputTokens: 240,
+  temperature: 0.35,
+  topP: 0.78,
+  maxOutputTokens: 600,
   thinkingConfig: {
     thinkingBudget: 0,
   },
 };
 
-const PRO_GENERATION_CONFIG: GenerationConfigLike = {
+const PRO_FREEFORM_CONFIG: GenerationConfigLike = {
+  responseMimeType: "text/plain",
+  candidateCount: 1,
+  temperature: 0.45,
+  topP: 0.9,
+  maxOutputTokens: 4000,
+};
+
+const PRO_STRUCTURING_CONFIG: GenerationConfigLike = {
   responseMimeType: "application/json",
   responseSchema: PRO_SCHEMA,
   candidateCount: 1,
-  temperature: 0.22,
-  topP: 0.86,
-  maxOutputTokens: 2600,
+  temperature: 0.1,
+  topP: 0.72,
+  maxOutputTokens: 3200,
+  thinkingConfig: {
+    thinkingBudget: 0,
+  },
 };
 
 export async function analyzeLitePrimaryEmotion(
   base64Image: string,
   options: AnalyzeOptions = {},
 ): Promise<LiteAnalysisResult> {
-  const timeoutMs = computeTimeoutMs(options.timeoutMs, LITE_TIMEOUT_MS, base64Image, 9_000);
+  const timeoutMs = computeTimeoutMs(
+    options.timeoutMs,
+    LITE_TIMEOUT_MS,
+    base64Image,
+    9_000,
+  );
 
   try {
     const { text, model } = await generateWithLaneFallback({
@@ -810,7 +983,12 @@ export async function analyzeFlashInsights(
   base64Image: string,
   options: AnalyzeOptions = {},
 ): Promise<FastAnalysisResult> {
-  const timeoutMs = computeTimeoutMs(options.timeoutMs, FLASH_TIMEOUT_MS, base64Image, 16_000);
+  const timeoutMs = computeTimeoutMs(
+    options.timeoutMs,
+    FLASH_TIMEOUT_MS,
+    base64Image,
+    16_000,
+  );
 
   try {
     const { text, model } = await generateWithLaneFallback({
@@ -834,7 +1012,10 @@ export async function analyzeFlashInsights(
     return sanitizeFlashResult(safeJsonParse(text), options, model);
   } catch (error) {
     logApiError("Flash insights", error, { frameId: options.frameId });
-    return toDefaultFlashResult(options, resolvedLaneModels.flash ?? FLASH_MODEL);
+    return toDefaultFlashResult(
+      options,
+      resolvedLaneModels.flash ?? FLASH_MODEL,
+    );
   }
 }
 
@@ -842,17 +1023,36 @@ export async function analyzeDepthInsights(
   base64Image: string,
   options: AnalyzeOptions = {},
 ): Promise<DepthAnalysisResult> {
-  const baseTimeoutMs = computeTimeoutMs(options.timeoutMs, PRO_TIMEOUT_MS, base64Image, 58_000);
-  const timeoutMs = options.videoClipBase64 ? Math.min(baseTimeoutMs + 10_000, 72_000) : baseTimeoutMs;
-  const hasVideoContext = Boolean(options.videoClipBase64 && options.videoMimeType);
+  const baseTimeoutMs = computeTimeoutMs(
+    options.timeoutMs,
+    PRO_TIMEOUT_MS,
+    base64Image,
+    58_000,
+  );
+  const totalTimeoutMs = options.videoClipBase64
+    ? Math.min(baseTimeoutMs + 10_000, 72_000)
+    : baseTimeoutMs;
+  const hasVideoContext = Boolean(
+    options.videoClipBase64 && options.videoMimeType,
+  );
 
+  // Stage 1: Pro model generates free-form medical analysis (no schema constraints).
+  const stage1TimeoutMs = Math.round(totalTimeoutMs * 0.7);
+  const stage2TimeoutMs = Math.round(totalTimeoutMs * 0.3);
+
+  let freeformText: string;
+  let proModel: string;
   try {
-    const { text, model } = await generateWithLaneFallback({
+    const prompt = hasVideoContext
+      ? `${PRO_FREEFORM_PROMPT}\nUse both the still image and the short webcam video clip. Use motion and temporal cues from the clip when useful.`
+      : PRO_FREEFORM_PROMPT;
+
+    const stage1 = await generateWithLaneFallback({
       lane: "pro",
-      label: "Pro medical interpretation",
+      label: "Pro free-form analysis",
       preferredModel: PRO_MODEL,
       fallbackModels: PRO_FALLBACK_MODELS,
-      timeoutMs,
+      timeoutMs: stage1TimeoutMs,
       contents: [
         {
           inlineData: {
@@ -870,20 +1070,38 @@ export async function analyzeDepthInsights(
               } as const,
             ]
           : []),
-        {
-          text: hasVideoContext
-            ? `${PRO_PROMPT}
-Use both the still image and the short webcam video clip. Use motion and temporal cues from the clip when useful.`
-            : PRO_PROMPT,
-        },
+        { text: prompt },
       ],
-      config: PRO_GENERATION_CONFIG,
-      context: { frameId: options.frameId, hasVideoContext },
+      config: PRO_FREEFORM_CONFIG,
+      context: { frameId: options.frameId, hasVideoContext, stage: 1 },
     });
-    return sanitizeDepthResult(safeJsonParse(text), options, model);
+    freeformText = stage1.text;
+    proModel = stage1.model;
   } catch (error) {
-    logApiError("Pro medical interpretation", error, { frameId: options.frameId });
+    logApiError("Pro free-form analysis", error, { frameId: options.frameId });
     return toDefaultDepthResult(options, resolvedLaneModels.pro ?? PRO_MODEL);
+  }
+
+  if (!freeformText.trim()) {
+    return toDefaultDepthResult(options, proModel);
+  }
+
+  // Stage 2: Flash model structures the free-form analysis into JSON.
+  try {
+    const { text } = await generateWithLaneFallback({
+      lane: "flash",
+      label: "Pro structuring",
+      preferredModel: FLASH_MODEL,
+      fallbackModels: FLASH_FALLBACK_MODELS,
+      timeoutMs: stage2TimeoutMs,
+      contents: [{ text: PRO_STRUCTURING_PROMPT + freeformText }],
+      config: PRO_STRUCTURING_CONFIG,
+      context: { frameId: options.frameId, stage: 2 },
+    });
+    return sanitizeDepthResult(safeJsonParse(text), options, proModel);
+  } catch (error) {
+    logApiError("Pro structuring", error, { frameId: options.frameId });
+    return toDefaultDepthResult(options, proModel);
   }
 }
 
@@ -895,7 +1113,9 @@ export async function analyzeFastFace(
   return analyzeFlashInsights(base64Image, options);
 }
 
-export async function analyzeFrame(base64Image: string): Promise<LegacyAnalysisResult> {
+export async function analyzeFrame(
+  base64Image: string,
+): Promise<LegacyAnalysisResult> {
   const capturedAt = Date.now();
   const [lite, flash, depth] = await Promise.all([
     analyzeLitePrimaryEmotion(base64Image, { frameId: 0, capturedAt }),

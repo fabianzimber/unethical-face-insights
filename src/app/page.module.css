@@ -8,9 +8,9 @@
 .permissionCard {
   width: min(460px, 100%);
   border-radius: 0; /* Keine Rundungen */
-  border: 2px solid #090e15; /* Harter Kontrast */
+  border: 4px solid #000000; /* Harter Kontrast */
   background: #ffffff;
-  box-shadow: 8px 8px 0px #090e15; /* Harter, abstrakter Brutalismus-Schatten */
+  box-shadow: 16px 16px 0px #000000; /* Harter, abstrakter Brutalismus-Schatten */
   padding: clamp(24px, 3vw, 32px);
   display: grid;
   gap: 16px;
@@ -35,9 +35,9 @@
   margin-top: 8px;
   width: 100%; /* Volle Breite wirkt technischer */
   border-radius: 0;
-  border: 2px solid #090e15;
+  border: 4px solid #000000;
   background: #ffffff;
-  color: #090e15;
+  color: #000000;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
   font-weight: 700;
@@ -49,7 +49,7 @@
 }
 
 .permissionButton:hover {
-  background: #090e15;
+  background: #000000;
   color: #ffffff;
 }
 
@@ -66,7 +66,7 @@
 }
 
 .consoleHeader {
-  border: 2px solid #1e293b;
+  border: 4px solid #000000;
   border-radius: 0;
   background: #ffffff;
   padding: clamp(16px, 2vw, 24px);
@@ -104,7 +104,7 @@
   aspect-ratio: 16 / 9;
   min-height: clamp(250px, 49vh, 760px);
   border-radius: 0;
-  border: 2px solid #1e293b;
+  border: 4px solid #000000;
   overflow: hidden;
   background: #000; /* Tiefes Schwarz für den Video-Hintergrund */
 }
@@ -117,8 +117,8 @@
   object-fit: cover;
   display: block;
   z-index: 1;
-  opacity: 0.9; /* Leicht entsättigter/technischer Look */
-  filter: contrast(1.1) grayscale(0.2); /* Gibt dem Feed einen etwas klinischeren Touch */
+  opacity: 1; /* Leicht entsättigter/technischer Look */
+  filter: contrast(1.4) brightness(1.2); /* Gibt dem Feed einen etwas klinischeren Touch */
 }
 
 .overlayCanvas {
@@ -140,7 +140,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: #090e15;
+  background: #000000;
   z-index: 30;
 }
 
@@ -173,7 +173,7 @@
   flex-wrap: wrap;
   gap: 0; /* Lückenlos für Tab-Look */
   pointer-events: auto;
-  border: 2px solid #1e293b;
+  border: 4px solid #000000;
   background: #ffffff;
 }
 
@@ -186,8 +186,8 @@
 }
 
 .statusChip {
-  border-right: 2px solid #1e293b;
-  color: #090e15;
+  border-right: 4px solid #000000;
+  color: #000000;
   border-radius: 0;
   padding: 8px 12px;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -204,12 +204,12 @@
 }
 
 .statusChipStrong {
-  background: #0055ff;
+  background: #0000ff;
   color: #fff;
 }
 
 .statusChipWarn {
-  background: #ffcc00;
+  background: #ffbb00;
   color: #000;
 }
 
@@ -220,7 +220,7 @@
   z-index: 20;
   width: min(460px, calc(100% - 32px));
   border-radius: 0;
-  border: 2px solid #090e15;
+  border: 4px solid #000000;
   background: #ffffff;
   padding: 16px;
 }
@@ -251,14 +251,14 @@
   line-height: 1;
   letter-spacing: -0.03em;
   text-transform: uppercase;
-  color: #090e15;
+  color: #000000;
 }
 
 .primaryEmotionScore {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #0055ff;
+  color: #0000ff;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -281,7 +281,7 @@
 .primaryEmotionMeterFill {
   height: 100%;
   border-radius: 0;
-  background: #0055ff;
+  background: #0000ff;
   transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -289,6 +289,21 @@
   display: grid;
   gap: 12px;
   align-content: start;
+}
+
+/* Flash panel fills panelRail height and scrolls vertically */
+.panelRail > .panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.panelRail .insightList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .proSection {
@@ -303,10 +318,18 @@
 .proInsightList {
   list-style: none;
   margin: 0;
-  padding: 0;
-  display: grid;
+  padding: 0 0 8px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  -webkit-overflow-scrolling: touch;
+}
+
+.proInsightList > li {
+  min-width: min(360px, 80vw);
+  flex: 0 0 auto;
 }
 
 .proDetailLabel {
@@ -316,12 +339,12 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #090e15;
+  color: #000000;
 }
 
 .panel {
   border-radius: 0;
-  border: 2px solid #1e293b;
+  border: 4px solid #000000;
   background: #ffffff;
   padding: 16px;
 }
@@ -333,8 +356,8 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #090e15;
-  border-bottom: 2px solid #090e15;
+  color: #000000;
+  border-bottom: 4px solid #000000;
   padding-bottom: 8px;
   margin-bottom: 12px;
 }
@@ -350,8 +373,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px; /* Lückenloses Grid-System durch Hintergrundfarbe simuliert */
-  background: #1e293b;
-  border: 2px solid #1e293b;
+  background: #000000;
+  border: 4px solid #000000;
 }
 
 .flashIndexCard {
@@ -375,7 +398,7 @@
   font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #090e15;
+  color: #000000;
 }
 
 .flashIndexHint {
@@ -395,7 +418,7 @@
 
 .insightItem {
   border-radius: 0;
-  border: 1px solid #1e293b;
+  border: 4px solid #000000;
   background: #f8fafc;
   padding: 12px;
   display: grid;
@@ -422,7 +445,7 @@
   display: grid;
   place-items: center;
   border-radius: 0;
-  background: #090e15;
+  background: #000000;
   color: #ffffff;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.65rem;
@@ -444,7 +467,7 @@
   margin: 0;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #0055ff;
+  color: #0000ff;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -458,16 +481,16 @@
 .confidenceFill {
   height: 100%;
   border-radius: 0;
-  background: #090e15;
+  background: #000000;
 }
 
 .insightTag {
   margin: 0;
   width: fit-content;
   border-radius: 0;
-  border: 1px solid #1e293b;
+  border: 4px solid #000000;
   background: #ffffff;
-  color: #090e15;
+  color: #000000;
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.6rem;
   font-weight: 700;
@@ -484,11 +507,11 @@
 }
 
 /* Hardcoded status borders for insights */
-.proItem { border-left: 4px solid #0055ff; }
-.toneWarm { border-left: 4px solid #ff8800; }
-.toneAlert { border-left: 4px solid #ff0033; }
-.toneCool { border-left: 4px solid #00bbff; }
-.toneNeutral { border-left: 4px solid #475569; }
+.proItem { border-left: 8px solid #000000; }
+.toneWarm { border-left: 8px solid #000000; }
+.toneAlert { border-left: 8px solid #000000; }
+.toneCool { border-left: 8px solid #000000; }
+.toneNeutral { border-left: 8px solid #000000; }
 
 .emptyState {
   margin: 0;
@@ -505,9 +528,9 @@
     align-items: start;
   }
   .panelRail {
-    align-self: stretch;
-    max-height: none;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 }
 
