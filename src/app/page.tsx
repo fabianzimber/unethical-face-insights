@@ -146,16 +146,22 @@ interface CoverProjection {
   renderHeight: number;
 }
 
-function computeContainProjection(
+function computeCoverProjection(
   video: HTMLVideoElement | null,
   viewportWidth: number,
   viewportHeight: number,
 ): CoverProjection {
   const safeWidth = Math.max(1, viewportWidth);
   const safeHeight = Math.max(1, viewportHeight);
-  const sourceWidth = Math.max(1, video?.videoWidth || safeWidth);
-  const sourceHeight = Math.max(1, video?.videoHeight || safeHeight);
-  const sourceAspect = sourceWidth / sourceHeight;
+  const videoWidth = video?.videoWidth || 0;
+  const videoHeight = video?.videoHeight || 0;
+
+  // Fallback if video dims are not yet loaded
+  if (!videoWidth || !videoHeight) {
+    return { offsetX: 0, offsetY: 0, renderWidth: safeWidth, renderHeight: safeHeight };
+  }
+
+  const sourceAspect = videoWidth / videoHeight;
   const viewportAspect = safeWidth / safeHeight;
 
   let renderWidth = safeWidth;
@@ -164,15 +170,15 @@ function computeContainProjection(
   let offsetY = 0;
 
   if (sourceAspect > viewportAspect) {
-    // Source is wider: match width, calculate height, add top/bottom padding
-    renderWidth = safeWidth;
-    renderHeight = safeWidth / sourceAspect;
-    offsetY = (safeHeight - renderHeight) / 2;
-  } else if (sourceAspect < viewportAspect) {
-    // Source is taller: match height, calculate width, add left/right padding
+    // Source is wider than viewport: fill height, crop sides
     renderHeight = safeHeight;
     renderWidth = safeHeight * sourceAspect;
     offsetX = (safeWidth - renderWidth) / 2;
+  } else {
+    // Source is taller than viewport: fill width, crop top/bottom
+    renderWidth = safeWidth;
+    renderHeight = safeWidth / sourceAspect;
+    offsetY = (safeHeight - renderHeight) / 2;
   }
 
   return { offsetX, offsetY, renderWidth, renderHeight };
@@ -748,7 +754,7 @@ export default function Home() {
       const tracked = trackedFrameRef.current;
       const flash = flashResultRef.current;
       const lite = liteResultRef.current;
-      const projection = computeContainProjection(videoRef.current, width, height);
+      const projection = computeCoverProjection(videoRef.current, width, height);
       const faceBox = tracked?.faceBox ?? flash?.faceBox ?? lite?.faceBox;
       let faceCenterX = width / 2;
       let faceCenterY = height / 2;
