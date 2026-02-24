@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import { db, signAuthJWT } from '@/lib/auth';
+import { db, signAuthJWT, publicKeyFromBase64 } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { rpID, expectedOrigin } from '@/lib/webauthn-config';
 
 export async function POST(req: Request) {
   try {
-    const data = db.read();
+    const data = await db.read();
     const body = await req.json();
 
     if (!data.currentChallenge) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
         expectedRPID: rpID,
         credential: {
           id: data.ownerCredential.id,
-          publicKey: new Uint8Array(data.ownerCredential.publicKey) as any,
+          publicKey: publicKeyFromBase64(data.ownerCredential.publicKey) as Uint8Array<ArrayBuffer>,
           counter: data.ownerCredential.counter,
           transports: data.ownerCredential.transports as any,
         },
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     } catch (error) {
       console.error(error);
       data.currentChallenge = null;
-      db.write(data);
+      await db.write(data);
       return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
     }
 
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       // Update the counter
       data.ownerCredential.counter = authenticationInfo.newCounter;
       data.currentChallenge = null;
-      db.write(data);
+      await db.write(data);
 
       // Create session
       const token = await signAuthJWT('owner');

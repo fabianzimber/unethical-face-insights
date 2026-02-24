@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyRegistrationResponse } from '@simplewebauthn/server';
-import { db, signAuthJWT } from '@/lib/auth';
+import { db, signAuthJWT, publicKeyToBase64 } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { rpID, expectedOrigin } from '@/lib/webauthn-config';
 
 export async function POST(req: Request) {
   try {
-    const data = db.read();
+    const data = await db.read();
     const body = await req.json();
 
     if (!data.currentChallenge) {
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     } catch (error) {
       console.error(error);
       data.currentChallenge = null;
-      db.write(data);
+      await db.write(data);
       return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
     }
 
@@ -39,17 +39,17 @@ export async function POST(req: Request) {
 
       // Ensure that we clear the challenge
       data.currentChallenge = null;
-      
-      // Save the credential
+
+      // Save the credential (publicKey stored as base64 string for Redis)
       data.ownerCredential = {
         id: credential.id,
-        publicKey: credential.publicKey,
+        publicKey: publicKeyToBase64(credential.publicKey),
         counter: registrationInfo.credential.counter ?? 0,
         transports: body.response.transports,
       };
 
-      db.write(data);
-      
+      await db.write(data);
+
       // Give them a session immediately upon registration
       const token = await signAuthJWT('owner');
       const cookieStore = await cookies();

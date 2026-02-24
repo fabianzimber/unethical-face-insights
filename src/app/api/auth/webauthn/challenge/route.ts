@@ -5,7 +5,7 @@ import { rpID, rpName } from '@/lib/webauthn-config';
 
 export async function POST(req: Request) {
   try {
-    const data = db.read();
+    const data = await db.read();
     let options;
 
     if (!data.ownerCredential) {
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
     // Save challenge to DB
     data.currentChallenge = options.challenge;
-    db.write(data);
+    await db.write(data);
 
     return NextResponse.json(options);
   } catch (error) {

@@ -1,8 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import { Redis } from '@upstash/redis';
 import { SignJWT, jwtVerify } from 'jose';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'auth.json');
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'a-very-secure-secret-that-should-be-in-env-brutalist'
 );
@@ -11,7 +9,7 @@ export type AuthRole = 'owner' | 'guest';
 
 export interface OwnerCredential {
   id: string;
-  publicKey: Uint8Array;
+  publicKey: string; // base64 encoded for Redis storage
   counter: number;
   transports?: string[];
 }
@@ -27,81 +25,59 @@ export interface AuthDB {
   currentChallenge: string | null;
 }
 
+const REDIS_KEY = 'auth:db';
+
 const defaultDB: AuthDB = {
   ownerCredential: null,
-  activeInvites: [], // Empty default state, fully secure
+  activeInvites: [],
   currentChallenge: null,
 };
 
-function readDB(): AuthDB {
+function getRedis(): Redis {
+  return Redis.fromEnv();
+}
+
+async function readDB(): Promise<AuthDB> {
   try {
-    if (!fs.existsSync(DB_PATH)) {
-      const fresh: AuthDB = { ...defaultDB, activeInvites: [] };
-      writeDB(fresh);
-      return fresh;
-    }
-    const data = fs.readFileSync(DB_PATH, 'utf-8');
-    const parsed = JSON.parse(data);
-    
-    // Convert base64 publicKey back to Uint8Array for WebAuthn
-    if (parsed.ownerCredential && parsed.ownerCredential.publicKey) {
-      parsed.ownerCredential.publicKey = new Uint8Array(
-        Buffer.from(parsed.ownerCredential.publicKey, 'base64')
-      );
-    }
-    
-    return { ...defaultDB, ...parsed };
+    const data = await getRedis().get<AuthDB>(REDIS_KEY);
+    if (!data) return { ...defaultDB, activeInvites: [] };
+    return { ...defaultDB, ...data };
   } catch (error) {
-    console.error('Error reading auth.json:', error);
+    console.error('Error reading from Redis:', error);
     return { ...defaultDB, activeInvites: [] };
   }
 }
 
-function writeDB(db: AuthDB) {
+async function writeDB(data: AuthDB): Promise<void> {
   try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    // Convert Uint8Array to base64 for JSON serialization
-    const serializedDB = { ...db };
-    if (serializedDB.ownerCredential && serializedDB.ownerCredential.publicKey) {
-      serializedDB.ownerCredential = {
-        ...serializedDB.ownerCredential,
-        publicKey: Buffer.from(serializedDB.ownerCredential.publicKey).toString('base64') as any
-      };
-    }
-
-    fs.writeFileSync(DB_PATH, JSON.stringify(serializedDB, null, 2));
+    await getRedis().set(REDIS_KEY, data);
   } catch (error) {
-    console.error('Error writing auth.json:', error);
+    console.error('Error writing to Redis:', error);
   }
 }
-
-// Simple in-process lock to prevent concurrent read-modify-write corruption
-let dbLock: Promise<void> = Promise.resolve();
 
 export const db = {
   read: readDB,
   write: writeDB,
-  /** Run an atomic read-modify-write operation with a lock */
+  /** Run an atomic read-modify-write operation */
   async update(fn: (data: AuthDB) => AuthDB | void): Promise<AuthDB> {
-    let release: () => void;
-    const prev = dbLock;
-    dbLock = new Promise((resolve) => { release = resolve; });
-    await prev;
-    try {
-      const data = readDB();
-      const result = fn(data);
-      const updated = result ?? data;
-      writeDB(updated);
-      return updated;
-    } finally {
-      release!();
-    }
+    const data = await readDB();
+    const result = fn(data);
+    const updated = result ?? data;
+    await writeDB(updated);
+    return updated;
   },
 };
+
+/** Convert a Uint8Array publicKey to base64 for storage */
+export function publicKeyToBase64(key: Uint8Array): string {
+  return Buffer.from(key).toString('base64');
+}
+
+/** Convert a base64-stored publicKey back to Uint8Array for WebAuthn */
+export function publicKeyFromBase64(key: string): Uint8Array {
+  return new Uint8Array(Buffer.from(key, 'base64'));
+}
 
 export async function signAuthJWT(role: AuthRole): Promise<string> {
   const expiry = role === 'guest' ? '20m' : '30d';
