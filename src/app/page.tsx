@@ -346,6 +346,7 @@ export default function Home() {
     transmittingPlayed: false,
     initialResultsPlayed: false,
     advancedResultsPlayed: false,
+    currentAudio: null as HTMLAudioElement | null,
   });
 
   const playSound = useCallback((type: "greetings" | "transmitting" | "initial" | "advanced") => {
@@ -353,7 +354,12 @@ export default function Home() {
     
     const tryPlay = (src: string) => {
       try {
+        if (state.currentAudio) {
+          state.currentAudio.pause();
+          state.currentAudio.currentTime = 0;
+        }
         const audio = new Audio(src);
+        state.currentAudio = audio;
         audio.play().catch(e => console.log("Audio autoplay blocked or failed:", e));
       } catch (e) {
         console.log("Failed to play audio:", e);
