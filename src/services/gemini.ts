@@ -626,7 +626,12 @@ function shouldFallbackModelError(error: unknown): boolean {
   // Rate-limit / quota exhaustion: all models in the lane share the same quota,
   // so trying fallbacks is pointless and just burns more requests.
   if (status === 429) return false;
-  if (message.includes("quota") || message.includes("resource_exhausted") || message.includes("rate limit")) return false;
+  if (
+    message.includes("quota") ||
+    message.includes("resource_exhausted") ||
+    message.includes("rate limit")
+  )
+    return false;
 
   if (status === 404) return true;
   if (
@@ -1078,7 +1083,6 @@ export async function analyzeDepthInsights(
     freeformText = stage1.text;
     proModel = stage1.model;
   } catch (error) {
-    logApiError("Pro free-form analysis", error, { frameId: options.frameId });
     return toDefaultDepthResult(options, resolvedLaneModels.pro ?? PRO_MODEL);
   }
 

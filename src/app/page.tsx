@@ -349,7 +349,7 @@ export default function Home() {
   const [primaryMoodSentence, setPrimaryMoodSentence] = useState("Layer 1 is initializing mood interpretation.");
   const [flashLegend, setFlashLegend] = useState<Array<{ emotion: string; confidence: number; explanation?: string; intensity?: string }>>([]);
   const [proLegend, setProLegend] = useState<DepthAnalysisResult["insights"]>([]);
-  const [proError, setProError] = useState<"rate-limited" | "error" | null>(null);
+  const [proError, setProError] = useState<"rate-limited" | "error" | "no-insights" | null>(null);
   const [hud, setHud] = useState<HudState>({
     liteMs: 0,
     flashMs: 0,
@@ -991,6 +991,7 @@ export default function Home() {
         const usableInsights = hasUsableProInsights(dedupedInsights);
         if (!usableInsights) {
           retryDelayOverrideMs = isFirstProRequest ? 2200 : PRO_EMPTY_RESULT_RETRY_MS;
+          setProError("no-insights");
         } else {
           setProError(null);
         }
